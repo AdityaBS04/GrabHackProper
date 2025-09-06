@@ -122,3 +122,6 @@ yarn-error.log*
 .npm
 .yarn/
 .pnp.*
+# Node.js cache files
+.cache/
+**/node_modules/.cache/
