@@ -99,3 +99,17 @@ tmp/
 # Configuration files with sensitive data
 config.json
 settings.json
+
+# Grab-specific ignores
+chat_history/
+user_sessions/
+complaint_images/
+validation_cache/
+groq_api_responses/
+
+# LangChain specific
+.langchain/
+langchain_cache/
+
+# Dependencies issues workaround
+requirements_backup.txt
