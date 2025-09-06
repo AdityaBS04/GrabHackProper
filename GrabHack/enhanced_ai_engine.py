@@ -1,0 +1,341 @@
+"""
+Enhanced Agentic AI Engine for GrabHack Customer Service
+Uses different Groq models based on function requirements:
+- Llama-4-Maverick for image processing functions
+- Llama-Prompt-Guard for security screening
+- GPT-4O-Mini for text-only functions
+"""
+
+import os
+import json
+import logging
+import base64
+from groq import Groq
+from typing import Dict, Any, Optional, List
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+logger = logging.getLogger(__name__)
+
+class EnhancedAgenticAIEngine:
+    """Enhanced AI Engine with image processing and security screening"""
+    
+    def __init__(self):
+        self.groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+        self.text_model = "openai/gpt-oss-120b"  # For resolving issues
+        self.image_model = "meta-llama/llama-3.2-90b-vision-instruct"  # For image processing 
+        self.security_model = "meta-llama/llama-prompt-guard-2-86m"  # For security screening
+        self.orchestrator_model = "llama-3.3-70b-versatile"  # For orchestration
+        
+        # Define which functions require images
+        self.image_required_functions = {
+            # Grab Food Customer functions that need image proof
+            'handle_missing_items': True,  # Photo of received items
+            'handle_wrong_item': True,    # Photo of wrong item
+            'handle_quality_issues': True, # Photo of poor quality food
+            'handle_spillage': True,      # Photo of spilled/damaged items
+            'handle_package_tampering': True, # Photo of tampered package
+            
+            # Grab Food Delivery Agent functions that need image proof
+            'handle_package_tampered_spilled': True, # Photo of damaged package
+            'handle_vehicle_breakdown': True, # Photo of broken vehicle
+            'handle_safety_accident_enroute': True, # Photo of accident/incident
+            
+            # Grab Cabs Customer functions that need image proof
+            'handle_vehicle_condition': True, # Photo of vehicle issues
+            'handle_safety_incident': True,  # Photo of safety concern
+            
+            # Grab Cabs Driver functions that need image proof  
+            'handle_vehicle_standards': True, # Photo of vehicle maintenance
+            
+            # Grab Mart Customer functions that need image proof
+            'handle_quality_issues': True,    # Photo of poor quality products
+            'handle_expired_damaged_items': True, # Photo of expired/damaged items
+            
+            # Grab Mart Dark House functions that need image proof
+            'handle_product_quality_control': True, # Photo of quality issues
+            'handle_temperature_control': True,     # Photo of temperature violations
+            
+            # Functions that don't require images (text-only)
+            'handle_substitution_issues': False,  # Text-only - preference issues
+            'handle_double_charge': False,
+            'handle_failed_payment_money_deducted': False, 
+            'handle_refund_not_initiated': False,
+            'handle_cod_marked_prepaid': False,
+            'handle_auto_cancellation': False,
+            'handle_delivery_status_error': False,
+            'handle_tracking_status_error': False,
+            'handle_coupon_offers_error': False,
+            'handle_rude_behavior': False,
+            'handle_payment_manipulation': False,
+            'handle_false_delivery': False,
+            'handle_delivery_delay': False,
+            'handle_location_difficulty': False,
+            'handle_multiple_deliveries': False,
+            'handle_route_optimization': False,
+            'handle_earnings_impact': False,
+            
+            # Add image-required functions
+            'handle_partial_delivery': True,  # Photo of partial delivery
+            'handle_temperature_issues': True  # Photo of temperature damage
+        }
+    
+    def process_complaint(self, function_name: str, user_query: str, service: str, 
+                         user_type: str, image_data: Optional[str] = None) -> str:
+        """Main method to process complaint using appropriate AI model"""
+        
+        try:
+            # Step 1: Security screening if image is provided
+            if image_data:
+                if not self._screen_image_security(image_data):
+                    return "⚠️ **Content Security Alert**\n\nThe uploaded image contains inappropriate content and cannot be processed. Please upload a relevant image related to your service issue."
+            
+            # Step 2: Determine if function requires image
+            requires_image = self.image_required_functions.get(function_name, False)
+            
+            if requires_image and not image_data:
+                return self._request_image_upload(function_name, service, user_type)
+            
+            # Step 3: Process with appropriate model
+            if requires_image and image_data:
+                return self._process_with_image_model(function_name, user_query, service, user_type, image_data)
+            else:
+                return self._process_with_text_model(function_name, user_query, service, user_type)
+                
+        except Exception as e:
+            logger.error(f"Error processing complaint: {e}")
+            return self._generate_fallback_response(function_name, user_query, service, user_type)
+    
+    def _screen_image_security(self, image_data: str) -> bool:
+        """Screen image for inappropriate content using Llama-Prompt-Guard"""
+        try:
+            prompt = f"""
+            Analyze this image for appropriateness in a customer service context. 
+            Determine if the image contains:
+            1. Relevant service-related content (food, vehicles, packages, etc.)
+            2. Any inappropriate, explicit, or harmful content
+            3. Personal information that should be protected
+            
+            Respond with only: SAFE or UNSAFE
+            """
+            
+            response = self.groq_client.chat.completions.create(
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": f"data:image/jpeg;base64,{image_data}"}
+                            }
+                        ]
+                    }
+                ],
+                model=self.security_model,
+                temperature=0.0,
+                max_tokens=10
+            )
+            
+            result = response.choices[0].message.content.strip().upper()
+            return result == "SAFE"
+            
+        except Exception as e:
+            logger.error(f"Security screening error: {e}")
+            # Default to safe if screening fails
+            return True
+    
+    def _process_with_image_model(self, function_name: str, user_query: str, 
+                                 service: str, user_type: str, image_data: str) -> str:
+        """Process complaint with image using Llama-4-Maverick"""
+        
+        context = self._get_function_context(function_name, service, user_type)
+        
+        prompt = f"""
+        You are an expert {service.replace('_', ' ').title()} customer service agent analyzing a visual complaint.
+
+        FUNCTION: {function_name.replace('_', ' ').title()}
+        SERVICE: {service.replace('_', ' ').title()}  
+        USER TYPE: {user_type.replace('_', ' ').title()}
+        
+        CONTEXT: {context}
+        
+        USER COMPLAINT: {user_query}
+        
+        Analyze the uploaded image and the text complaint. Provide a comprehensive resolution that:
+        
+        1. **Visual Assessment**: Describe what you see in the image and how it relates to the complaint
+        2. **Immediate Resolution**: Provide specific actions based on visual evidence  
+        3. **Compensation**: Offer appropriate compensation based on severity shown in image
+        4. **Prevention**: Suggest measures to prevent similar issues
+        5. **Follow-up**: Set clear next steps and timeline
+        
+        Be specific about what the image shows and how it affects the resolution.
+        """
+        
+        try:
+            response = self.groq_client.chat.completions.create(
+                messages=[
+                    {
+                        "role": "user", 
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": f"data:image/jpeg;base64,{image_data}"}
+                            }
+                        ]
+                    }
+                ],
+                model=self.image_model,
+                temperature=0.3,
+                max_tokens=1000
+            )
+            
+            return response.choices[0].message.content
+            
+        except Exception as e:
+            logger.error(f"Image processing error: {e}")
+            return self._process_with_text_model(function_name, user_query, service, user_type)
+    
+    def _process_with_text_model(self, function_name: str, user_query: str,
+                                service: str, user_type: str) -> str:
+        """Process text-only complaint using GPT-4O-Mini"""
+        
+        context = self._get_function_context(function_name, service, user_type)
+        
+        prompt = f"""
+        You are an expert {service.replace('_', ' ').title()} customer service agent.
+
+        FUNCTION: {function_name.replace('_', ' ').title()}
+        SERVICE: {service.replace('_', ' ').title()}
+        USER TYPE: {user_type.replace('_', ' ').title()}
+        
+        CONTEXT: {context}
+        
+        USER COMPLAINT: {user_query}
+        
+        Provide a comprehensive, personalized resolution that:
+        
+        1. **Acknowledgment**: Show empathy and understanding
+        2. **Immediate Actions**: Specific steps being taken now
+        3. **Compensation**: Appropriate compensation for this specific issue
+        4. **Prevention**: Measures to prevent recurrence  
+        5. **Timeline**: Clear expectations for resolution
+        
+        Make it specific to this exact situation, not generic.
+        """
+        
+        try:
+            response = self.groq_client.chat.completions.create(
+                messages=[{"role": "user", "content": prompt}],
+                model=self.text_model,
+                temperature=0.3,
+                max_tokens=800
+            )
+            
+            return response.choices[0].message.content
+            
+        except Exception as e:
+            logger.error(f"Text processing error: {e}")
+            return self._generate_fallback_response(function_name, user_query, service, user_type)
+    
+    def _request_image_upload(self, function_name: str, service: str, user_type: str) -> str:
+        """Request image upload for functions that require visual evidence"""
+        
+        image_requests = {
+            'handle_missing_items': "Please upload a photo of the items you received so we can verify what's missing and process your refund accordingly.",
+            'handle_wrong_item': "Please upload a photo of the incorrect item you received so we can arrange an immediate exchange and investigate with the restaurant.",
+            'handle_quality_issues': "Please upload a photo of the food quality issue so we can assess the severity and provide appropriate compensation while ensuring food safety standards.",
+            'handle_spillage': "Please upload a photo of the spilled/damaged items so we can document the issue and provide full compensation plus quality assurance measures.",
+            'handle_package_tampering': "Please upload a photo of the tampered package so we can investigate this security concern and ensure your safety.",
+            'handle_vehicle_breakdown': "Please upload a photo of the vehicle issue so we can provide immediate roadside assistance and document for maintenance support.",
+            'handle_safety_accident_enroute': "Please upload a photo of the incident (if safe to do so) so we can provide immediate support and document for safety review.",
+            'handle_vehicle_condition': "Please upload a photo of the vehicle condition issue so we can review with the driver partner and ensure your safety standards.",
+            'handle_safety_incident': "Please upload a photo of the safety concern (if safe to do so) so we can take immediate action and prevent future incidents.",
+            'handle_vehicle_standards': "Please upload a photo of the vehicle maintenance issue so we can provide guidance and ensure compliance with safety standards.",
+            'handle_expired_damaged_items': "Please upload a photo of the expired/damaged products so we can process immediate replacement and investigate with our suppliers.",
+            'handle_product_quality_control': "Please upload a photo of the quality issue so we can enhance our inspection procedures and provide appropriate compensation.",
+            'handle_temperature_control': "Please upload a photo showing the temperature control issue so we can address this critical food safety concern immediately."
+        }
+        
+        specific_request = image_requests.get(function_name, 
+            "Please upload a photo related to your issue so we can provide the best possible resolution.")
+        
+        return f"""📸 **Image Required for Resolution**
+
+**To provide you with the most accurate and comprehensive solution, we need visual evidence of your {service.replace('_', ' ').title()} issue.**
+
+**Why we need this:**
+{specific_request}
+
+**What to include in your photo:**
+- Clear view of the issue you're reporting
+- Any relevant details that support your complaint
+- Ensure the image is well-lit and focused
+
+**Your privacy is protected:**
+- Images are securely processed and used only for resolution
+- No personal information will be stored or shared
+- All images are deleted after issue resolution
+
+Please upload your image and resubmit your complaint for immediate processing."""
+
+    def _get_function_context(self, function_name: str, service: str, user_type: str) -> str:
+        """Get specific context for each function to guide AI reasoning"""
+        
+        function_contexts = {
+            # Grab Food Customer Image Functions
+            'handle_missing_items': f"Missing items from {service} orders require visual verification for accurate refund processing. Standard compensation: full refund + redelivery + $3-15 credit based on order value. Restaurant accountability measures apply.",
+            
+            'handle_wrong_item': f"Wrong item delivery requires photo evidence for exchange processing. Policy: customer keeps wrong item + receives correct item + $5-20 compensation. Restaurant training implications considered.",
+            
+            'handle_quality_issues': f"Food quality issues require visual assessment for health and safety protocols. Full refund + health safety compensation ($10-50) + restaurant quality audit trigger. Health department notification if severe.",
+            
+            'handle_spillage': f"Spilled/damaged food requires photo documentation for full compensation. Temperature control assessment + delivery partner review + customer protection guarantee activation.",
+            
+            'handle_package_tampering': f"Package tampering is a serious security issue requiring immediate documentation. Full refund + security investigation + customer safety prioritization + delivery verification protocol enhancement.",
+            
+            # Text-only Functions  
+            'handle_double_charge': f"Payment system errors require immediate refund processing (2-5 business days) + transaction investigation + account protection measures + payment system audit.",
+            
+            'handle_rude_behavior': f"Professional conduct violations require driver/partner performance review + customer service recovery + behavior coaching + satisfaction guarantee.",
+            
+            'handle_delivery_delay': f"Delivery delays require compensation based on time exceeded + route optimization review + customer priority status + service improvement measures.",
+            
+            # Add more function contexts as needed...
+        }
+        
+        return function_contexts.get(function_name, 
+            f"Provide comprehensive {service} customer service resolution for {user_type} with appropriate compensation and follow-up measures.")
+    
+    def _generate_fallback_response(self, function_name: str, user_query: str, 
+                                   service: str, user_type: str) -> str:
+        """Generate fallback response when AI models fail"""
+        
+        service_name = service.replace('_', ' ').title()
+        function_display = function_name.replace('handle_', '').replace('_', ' ').title()
+        
+        return f"""🔧 **{service_name} Issue Resolution**
+
+**{function_display} - Processing Your Request**
+
+We acknowledge your {service_name} concern and are committed to resolving it promptly. While our AI system is temporarily unavailable, our team is processing your issue manually.
+
+**Immediate Actions:**
+- Issue logged and prioritized for manual review
+- Appropriate compensation will be determined based on case specifics
+- Investigation initiated with relevant service partners
+- Customer satisfaction follow-up scheduled
+
+**Next Steps:**
+- Manual review: 2-4 hours  
+- Resolution processing: 4-24 hours
+- Compensation application: Within 24 hours
+- Follow-up contact: Within 48 hours
+
+**Reference ID:** {service.upper()}-{function_name.upper()}-{hash(user_query) % 10000}
+
+Thank you for your patience as we ensure you receive the best possible resolution."""

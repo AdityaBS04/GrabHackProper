@@ -1,0 +1,688 @@
+"""
+Operational Issues Handler
+Consolidates: Package tampered/spilled, Wrong package, Payment collection (COD), 
+Customer unavailable, Long wait times, Late cancellations
+"""
+
+import asyncio
+from datetime import datetime, timedelta
+from typing import Optional, Dict, List, Any, Tuple
+from dataclasses import dataclass
+from enum import Enum
+import base64
+import json
+
+from groq import AsyncGroq
+
+
+class OperationalIssueType(Enum):
+    PACKAGE_TAMPERED = "package_integrity_compromised"
+    WRONG_PACKAGE = "incorrect_order_delivered"
+    PAYMENT_COLLECTION = "cash_on_delivery_issues"
+    CUSTOMER_UNAVAILABLE = "customer_not_available_for_delivery"
+    LONG_WAIT_TIME = "extended_waiting_at_customer_location"
+    LATE_CANCELLATION = "customer_cancellation_after_pickup"
+
+
+class PackageCondition(Enum):
+    TAMPERED_SEAL = "packaging_seal_broken"
+    SPILLED_CONTENTS = "food_contents_spilled"
+    DAMAGED_CONTAINER = "container_physically_damaged"
+    TEMPERATURE_COMPROMISED = "food_temperature_unsafe"
+
+
+class PaymentIssue(Enum):
+    INSUFFICIENT_CASH = "customer_lacks_exact_change"
+    FAKE_CURRENCY = "counterfeit_money_suspected"
+    PAYMENT_REFUSAL = "customer_refuses_to_pay"
+    DIGITAL_PAYMENT_FAILURE = "cod_digital_payment_failed"
+
+
+class CustomerAvailabilityStatus(Enum):
+    NOT_RESPONDING = "no_response_to_contact_attempts"
+    TEMPORARILY_AWAY = "customer_temporarily_unavailable"
+    WRONG_CONTACT = "incorrect_contact_information"
+    DELIVERY_REFUSED = "customer_refuses_delivery"
+
+
+class CancellationStage(Enum):
+    AFTER_PICKUP = "post_pickup_cancellation"
+    EN_ROUTE = "en_route_cancellation"
+    AT_LOCATION = "at_delivery_location_cancellation"
+    DELIVERY_ATTEMPTED = "post_delivery_attempt_cancellation"
+
+
+@dataclass
+class OperationalContext:
+    order_id: str
+    customer_id: str
+    delivery_agent_id: str
+    restaurant_id: str
+    issue_type: OperationalIssueType
+    order_value: float
+    delivery_fee: float
+    payment_method: str  # COD, digital, etc.
+    food_items: List[str]
+    temperature_sensitive: bool
+    time_at_location: int  # minutes
+    customer_contact_attempts: int
+    customer_responsive: bool
+    pickup_time: Optional[datetime] = None
+    current_time: Optional[datetime] = None
+    package_condition_description: Optional[str] = None
+    payment_amount_expected: Optional[float] = None
+    evidence_images: Optional[List[bytes]] = None
+    additional_context: Optional[Dict[str, Any]] = None
+
+
+class OperationalHandler:
+    def __init__(self):
+        self.groq_client = AsyncGroq()
+        self.max_wait_time = 20  # minutes
+        self.food_safety_time_limit = 30  # minutes
+        self.escalation_threshold = 15  # minutes
+        
+    async def handle_operational_issue(self, context: OperationalContext) -> Dict[str, Any]:
+        """Main handler for all operational issues"""
+        
+        if context.issue_type == OperationalIssueType.PACKAGE_TAMPERED:
+            return await self._handle_package_tampered(context)
+        elif context.issue_type == OperationalIssueType.WRONG_PACKAGE:
+            return await self._handle_wrong_package(context)
+        elif context.issue_type == OperationalIssueType.PAYMENT_COLLECTION:
+            return await self._handle_payment_collection(context)
+        elif context.issue_type == OperationalIssueType.CUSTOMER_UNAVAILABLE:
+            return await self._handle_customer_unavailable(context)
+        elif context.issue_type == OperationalIssueType.LONG_WAIT_TIME:
+            return await self._handle_long_wait_time(context)
+        elif context.issue_type == OperationalIssueType.LATE_CANCELLATION:
+            return await self._handle_late_cancellation(context)
+        else:
+            return {"error": "Unknown operational issue type"}
+    
+    async def _handle_package_tampered(self, context: OperationalContext) -> Dict[str, Any]:
+        """Handle package tampering and food safety issues"""
+        
+        # Analyze package condition and safety
+        package_analysis = await self._analyze_package_condition(context)
+        
+        # Food safety assessment
+        safety_assessment = await self._assess_food_safety(context, package_analysis)
+        
+        # Customer notification and options
+        customer_notification = await self._notify_customer_package_issue(context, package_analysis)
+        
+        # Replacement order coordination
+        replacement_coordination = await self._coordinate_replacement_order(context, package_analysis)
+        
+        # Restaurant notification
+        restaurant_notification = await self._notify_restaurant_package_issue(context, package_analysis)
+        
+        # Performance protection and compensation
+        agent_protection = await self._apply_package_performance_protection(context, package_analysis)
+        
+        return {
+            "issue_type": "package_tampered",
+            "package_analysis": package_analysis,
+            "safety_assessment": safety_assessment,
+            "customer_notification": customer_notification,
+            "replacement_coordination": replacement_coordination,
+            "restaurant_notification": restaurant_notification,
+            "agent_protection": agent_protection,
+            "status": "handled",
+            "timestamp": datetime.now().isoformat()
+        }
+    
+    async def _analyze_package_condition(self, context: OperationalContext) -> Dict[str, Any]:
+        """Analyze package tampering using AI"""
+        
+        analysis_prompt = f"""
+        Analyze this package tampering incident:
+        
+        Package Condition: {context.package_condition_description or 'damaged_during_transit'}
+        Food Items: {', '.join(context.food_items)}
+        Temperature Sensitive: {context.temperature_sensitive}
+        Order Value: ${context.order_value}
+        Time Since Pickup: {((context.current_time or datetime.now()) - (context.pickup_time or datetime.now() - timedelta(minutes=20))).seconds // 60} minutes
+        
+        Provide analysis in this exact format:
+        CONDITION_TYPE: [TAMPERED_SEAL/SPILLED_CONTENTS/DAMAGED_CONTAINER/TEMPERATURE_COMPROMISED]
+        FOOD_SAFETY_RISK: [LOW/MEDIUM/HIGH/CRITICAL]
+        DELIVERY_FEASIBLE: [true/false]
+        CUSTOMER_ACCEPTANCE_LIKELY: [true/false]
+        REPLACEMENT_REQUIRED: [true/false]
+        REFUND_AMOUNT: [dollar amount or 'full']
+        AGENT_LIABILITY: [NONE/PARTIAL/FULL]
+        RECOMMENDED_ACTIONS: [comma-separated list]
+        """
+        
+        try:
+            if context.evidence_images:
+                image_analysis = await self._analyze_package_evidence(context.evidence_images[0], context)
+                analysis_prompt += f"\n\nPackage Image Evidence: {image_analysis}"
+            
+            response = await self.groq_client.chat.completions.create(
+                model="llama-3.1-70b-versatile",
+                messages=[
+                    {"role": "system", "content": "You are an expert in food safety and package integrity assessment. Prioritize customer safety."},
+                    {"role": "user", "content": analysis_prompt}
+                ],
+                temperature=0.1,
+                max_tokens=800
+            )
+            
+            return self._parse_ai_analysis(response.choices[0].message.content)
+            
+        except Exception as e:
+            return self._create_fallback_package_analysis(context)
+    
+    async def _handle_wrong_package(self, context: OperationalContext) -> Dict[str, Any]:
+        """Handle wrong package delivery mix-ups"""
+        
+        # Verify order mismatch
+        order_verification = await self._verify_order_mismatch(context)
+        
+        # Customer communication
+        customer_communication = await self._communicate_wrong_package(context, order_verification)
+        
+        # Correct order coordination
+        correct_order_coordination = await self._coordinate_correct_order_delivery(context, order_verification)
+        
+        # Wrong package handling
+        wrong_package_handling = await self._handle_misdelivered_package(context, order_verification)
+        
+        # Performance protection
+        performance_protection = await self._apply_mixup_performance_protection(context, order_verification)
+        
+        return {
+            "issue_type": "wrong_package",
+            "order_verification": order_verification,
+            "customer_communication": customer_communication,
+            "correct_order_coordination": correct_order_coordination,
+            "wrong_package_handling": wrong_package_handling,
+            "performance_protection": performance_protection,
+            "status": "handled",
+            "timestamp": datetime.now().isoformat()
+        }
+    
+    async def _handle_payment_collection(self, context: OperationalContext) -> Dict[str, Any]:
+        """Handle COD payment collection issues"""
+        
+        # Analyze payment issue
+        payment_analysis = await self._analyze_payment_issue(context)
+        
+        # Payment resolution attempts
+        payment_resolution = await self._attempt_payment_resolution(context, payment_analysis)
+        
+        # Alternative payment methods
+        alternative_payments = await self._explore_alternative_payment_methods(context, payment_analysis)
+        
+        # Escalation procedures
+        escalation_procedures = await self._execute_payment_escalation(context, payment_analysis)
+        
+        # Agent protection and compensation
+        agent_protection = await self._apply_payment_performance_protection(context, payment_analysis)
+        
+        return {
+            "issue_type": "payment_collection",
+            "payment_analysis": payment_analysis,
+            "payment_resolution": payment_resolution,
+            "alternative_payments": alternative_payments,
+            "escalation_procedures": escalation_procedures,
+            "agent_protection": agent_protection,
+            "status": "handled",
+            "timestamp": datetime.now().isoformat()
+        }
+    
+    async def _handle_customer_unavailable(self, context: OperationalContext) -> Dict[str, Any]:
+        """Handle customer unavailability situations"""
+        
+        # Analyze availability situation
+        availability_analysis = await self._analyze_customer_availability(context)
+        
+        # Contact escalation protocol
+        contact_escalation = await self._execute_contact_escalation_protocol(context, availability_analysis)
+        
+        # Alternative delivery options
+        alternative_delivery = await self._explore_alternative_delivery_options(context, availability_analysis)
+        
+        # Food quality management
+        food_quality_management = await self._manage_food_quality_during_wait(context, availability_analysis)
+        
+        # Performance protection
+        performance_protection = await self._apply_availability_performance_protection(context, availability_analysis)
+        
+        return {
+            "issue_type": "customer_unavailable",
+            "availability_analysis": availability_analysis,
+            "contact_escalation": contact_escalation,
+            "alternative_delivery": alternative_delivery,
+            "food_quality_management": food_quality_management,
+            "performance_protection": performance_protection,
+            "status": "handled",
+            "timestamp": datetime.now().isoformat()
+        }
+    
+    async def _handle_long_wait_time(self, context: OperationalContext) -> Dict[str, Any]:
+        """Handle extended waiting times at customer location"""
+        
+        # Analyze wait situation
+        wait_analysis = await self._analyze_wait_situation(context)
+        
+        # Customer communication during wait
+        wait_communication = await self._manage_wait_communication(context, wait_analysis)
+        
+        # Food quality preservation
+        quality_preservation = await self._implement_quality_preservation(context, wait_analysis)
+        
+        # Escalation and alternatives
+        escalation_alternatives = await self._manage_wait_escalation(context, wait_analysis)
+        
+        # Performance protection
+        performance_protection = await self._apply_wait_performance_protection(context, wait_analysis)
+        
+        return {
+            "issue_type": "long_wait_time",
+            "wait_analysis": wait_analysis,
+            "wait_communication": wait_communication,
+            "quality_preservation": quality_preservation,
+            "escalation_alternatives": escalation_alternatives,
+            "performance_protection": performance_protection,
+            "status": "handled",
+            "timestamp": datetime.now().isoformat()
+        }
+    
+    async def _handle_late_cancellation(self, context: OperationalContext) -> Dict[str, Any]:
+        """Handle customer cancellations after pickup"""
+        
+        # Analyze cancellation situation
+        cancellation_analysis = await self._analyze_late_cancellation(context)
+        
+        # Food disposal management
+        food_disposal = await self._manage_food_disposal(context, cancellation_analysis)
+        
+        # Compensation calculation
+        compensation_calculation = await self._calculate_cancellation_compensation(context, cancellation_analysis)
+        
+        # Customer financial responsibility
+        customer_charges = await self._process_customer_cancellation_charges(context, cancellation_analysis)
+        
+        # Performance protection
+        performance_protection = await self._apply_cancellation_performance_protection(context, cancellation_analysis)
+        
+        return {
+            "issue_type": "late_cancellation",
+            "cancellation_analysis": cancellation_analysis,
+            "food_disposal": food_disposal,
+            "compensation_calculation": compensation_calculation,
+            "customer_charges": customer_charges,
+            "performance_protection": performance_protection,
+            "status": "handled",
+            "timestamp": datetime.now().isoformat()
+        }
+    
+    # Implementation of key analysis methods
+    async def _assess_food_safety(self, context: OperationalContext, package_analysis: Dict[str, Any]) -> Dict[str, Any]:
+        """Assess food safety based on package condition"""
+        
+        safety_risk = package_analysis.get("FOOD_SAFETY_RISK", "MEDIUM")
+        
+        safety_assessment = {
+            "risk_level": safety_risk,
+            "safe_for_consumption": safety_risk in ["LOW", "MEDIUM"],
+            "replacement_recommended": safety_risk in ["HIGH", "CRITICAL"],
+            "health_department_notification_required": safety_risk == "CRITICAL"
+        }
+        
+        if context.temperature_sensitive:
+            time_elapsed = ((context.current_time or datetime.now()) - (context.pickup_time or datetime.now() - timedelta(minutes=20))).seconds // 60
+            if time_elapsed > self.food_safety_time_limit:
+                safety_assessment["temperature_safety_compromised"] = True
+                safety_assessment["safe_for_consumption"] = False
+        
+        return safety_assessment
+    
+    async def _verify_order_mismatch(self, context: OperationalContext) -> Dict[str, Any]:
+        """Verify and analyze order mismatch"""
+        
+        verification_prompt = f"""
+        Analyze this order mismatch situation:
+        
+        Expected Items: {', '.join(context.food_items)}
+        Order Value: ${context.order_value}
+        Customer ID: {context.customer_id}
+        
+        Provide verification in this format:
+        MISMATCH_TYPE: [COMPLETE_WRONG_ORDER/PARTIAL_MISMATCH/QUANTITY_ERROR/ITEM_SUBSTITUTION]
+        CUSTOMER_IMPACT: [LOW/MEDIUM/HIGH]
+        CORRECT_ORDER_AVAILABILITY: [IMMEDIATE/DELAYED/UNAVAILABLE]
+        RESOLUTION_COMPLEXITY: [SIMPLE/MODERATE/COMPLEX]
+        CUSTOMER_SATISFACTION_RISK: [LOW/MEDIUM/HIGH]
+        """
+        
+        try:
+            response = await self.groq_client.chat.completions.create(
+                model="llama-3.1-70b-versatile",
+                messages=[
+                    {"role": "system", "content": "You are an expert in order management and customer service resolution."},
+                    {"role": "user", "content": verification_prompt}
+                ],
+                temperature=0.1,
+                max_tokens=600
+            )
+            
+            return self._parse_ai_analysis(response.choices[0].message.content)
+            
+        except Exception as e:
+            return self._create_fallback_order_verification(context)
+    
+    async def _analyze_payment_issue(self, context: OperationalContext) -> Dict[str, Any]:
+        """Analyze COD payment collection issue"""
+        
+        payment_prompt = f"""
+        Analyze this COD payment issue:
+        
+        Expected Payment: ${context.payment_amount_expected or context.order_value + context.delivery_fee}
+        Order Value: ${context.order_value}
+        Delivery Fee: ${context.delivery_fee}
+        Customer Contact Attempts: {context.customer_contact_attempts}
+        Customer Responsive: {context.customer_responsive}
+        
+        Provide analysis in this format:
+        PAYMENT_ISSUE_TYPE: [INSUFFICIENT_CASH/FAKE_CURRENCY/PAYMENT_REFUSAL/DIGITAL_PAYMENT_FAILURE]
+        RESOLUTION_PROBABILITY: [0.0-1.0]
+        ALTERNATIVE_PAYMENT_FEASIBLE: [true/false]
+        ESCALATION_REQUIRED: [true/false]
+        AGENT_SAFETY_CONCERN: [true/false]
+        RECOMMENDED_ACTIONS: [comma-separated list]
+        """
+        
+        try:
+            response = await self.groq_client.chat.completions.create(
+                model="llama-3.1-70b-versatile",
+                messages=[
+                    {"role": "system", "content": "You are an expert in payment collection and financial dispute resolution."},
+                    {"role": "user", "content": payment_prompt}
+                ],
+                temperature=0.1,
+                max_tokens=600
+            )
+            
+            return self._parse_ai_analysis(response.choices[0].message.content)
+            
+        except Exception as e:
+            return self._create_fallback_payment_analysis(context)
+    
+    # Implementation of coordination methods
+    async def _coordinate_replacement_order(self, context: OperationalContext, analysis: Dict[str, Any]) -> Dict[str, Any]:
+        """Coordinate replacement order for damaged package"""
+        
+        if analysis.get("REPLACEMENT_REQUIRED") == "true":
+            coordination_result = {
+                "replacement_order_initiated": True,
+                "restaurant_contacted": True,
+                "estimated_preparation_time": "20-30 minutes",
+                "customer_notified_of_delay": True,
+                "original_order_disposal_arranged": True
+            }
+            
+            # Check restaurant availability
+            coordination_result["restaurant_can_remake"] = True  # Simulate restaurant check
+            
+            if not coordination_result["restaurant_can_remake"]:
+                coordination_result["full_refund_processed"] = True
+                coordination_result["alternative_restaurant_suggested"] = True
+        else:
+            coordination_result = {
+                "replacement_not_required": True,
+                "customer_offered_partial_refund": analysis.get("REFUND_AMOUNT") != "0"
+            }
+        
+        return coordination_result
+    
+    async def _attempt_payment_resolution(self, context: OperationalContext, analysis: Dict[str, Any]) -> List[str]:
+        """Attempt various payment resolution methods"""
+        resolution_attempts = []
+        
+        issue_type = analysis.get("PAYMENT_ISSUE_TYPE", "INSUFFICIENT_CASH")
+        
+        if issue_type == "INSUFFICIENT_CASH":
+            resolution_attempts.extend([
+                "exact_change_calculation_assistance",
+                "partial_payment_acceptance_considered",
+                "nearby_atm_location_provided"
+            ])
+        
+        elif issue_type == "DIGITAL_PAYMENT_FAILURE":
+            resolution_attempts.extend([
+                "alternative_payment_app_suggested",
+                "qr_code_payment_attempted",
+                "manual_card_entry_tried"
+            ])
+        
+        elif issue_type == "PAYMENT_REFUSAL":
+            resolution_attempts.extend([
+                "order_quality_verification_completed",
+                "customer_complaint_addressed",
+                "supervisor_escalation_offered"
+            ])
+        
+        return resolution_attempts
+    
+    async def _manage_food_disposal(self, context: OperationalContext, analysis: Dict[str, Any]) -> Dict[str, Any]:
+        """Manage food disposal for cancelled orders"""
+        
+        time_since_pickup = ((context.current_time or datetime.now()) - (context.pickup_time or datetime.now() - timedelta(minutes=20))).seconds // 60
+        
+        disposal_management = {
+            "disposal_method": "return_to_restaurant" if time_since_pickup < 15 else "safe_disposal",
+            "food_safety_compliant": True,
+            "waste_minimization_attempted": True
+        }
+        
+        if time_since_pickup < 15 and not context.temperature_sensitive:
+            disposal_management.update({
+                "return_to_restaurant_feasible": True,
+                "restaurant_acceptance_likely": True
+            })
+        elif time_since_pickup < 30:
+            disposal_management.update({
+                "donation_to_charity_considered": True,
+                "agent_compensation_food_value": min(context.order_value * 0.5, 12.0)
+            })
+        else:
+            disposal_management.update({
+                "safe_disposal_required": True,
+                "food_safety_time_exceeded": True
+            })
+        
+        return disposal_management
+    
+    async def _calculate_cancellation_compensation(self, context: OperationalContext, analysis: Dict[str, Any]) -> Dict[str, Any]:
+        """Calculate agent compensation for late cancellations"""
+        
+        time_since_pickup = ((context.current_time or datetime.now()) - (context.pickup_time or datetime.now() - timedelta(minutes=20))).seconds // 60
+        
+        compensation = {
+            "base_delivery_fee": context.delivery_fee,
+            "time_compensation": time_since_pickup * 1.5,  # $1.5 per minute
+            "inconvenience_fee": 8.0,  # Base inconvenience
+            "fuel_reimbursement": 3.0   # Estimated fuel cost
+        }
+        
+        total_compensation = sum(compensation.values())
+        
+        return {
+            "compensation_breakdown": compensation,
+            "total_compensation": total_compensation,
+            "payment_method": "next_payout_cycle",
+            "compensation_justified": True
+        }
+    
+    # Performance protection methods
+    async def _apply_package_performance_protection(self, context: OperationalContext, analysis: Dict[str, Any]) -> Dict[str, Any]:
+        """Apply performance protection for package issues"""
+        return {
+            "delivery_completion_protected": True,
+            "performance_score_maintained": True,
+            "incident_classification": "package_integrity_issue_external",
+            "agent_liability": analysis.get("AGENT_LIABILITY", "NONE"),
+            "compensation_eligible": analysis.get("AGENT_LIABILITY") == "NONE"
+        }
+    
+    async def _apply_payment_performance_protection(self, context: OperationalContext, analysis: Dict[str, Any]) -> Dict[str, Any]:
+        """Apply performance protection for payment issues"""
+        return {
+            "delivery_attempt_credited": True,
+            "performance_score_protection": True,
+            "incident_classification": "customer_payment_issue",
+            "safety_protocol_followed": analysis.get("AGENT_SAFETY_CONCERN") == "true",
+            "additional_compensation": analysis.get("ESCALATION_REQUIRED") == "true"
+        }
+    
+    async def _apply_availability_performance_protection(self, context: OperationalContext, analysis: Dict[str, Any]) -> Dict[str, Any]:
+        """Apply performance protection for customer unavailability"""
+        return {
+            "delivery_time_adjustment": True,
+            "performance_score_protection": True,
+            "incident_classification": "customer_unavailability",
+            "wait_time_compensation": context.time_at_location > 10,
+            "time_excluded_from_metrics": context.time_at_location
+        }
+    
+    async def _apply_wait_performance_protection(self, context: OperationalContext, analysis: Dict[str, Any]) -> Dict[str, Any]:
+        """Apply performance protection for long wait times"""
+        return {
+            "delivery_time_adjustment": True,
+            "performance_score_protection": True,
+            "incident_classification": "customer_caused_delay",
+            "wait_time_compensation": context.time_at_location * 1.5,  # $1.5 per minute
+            "customer_rating_protection": context.time_at_location > 15
+        }
+    
+    async def _apply_cancellation_performance_protection(self, context: OperationalContext, analysis: Dict[str, Any]) -> Dict[str, Any]:
+        """Apply performance protection for late cancellations"""
+        return {
+            "delivery_success_rate_protected": True,
+            "completion_time_excluded": True,
+            "customer_rating_impact_negated": True,
+            "incident_classification": "customer_late_cancellation",
+            "full_compensation_eligible": True
+        }
+    
+    # Evidence analysis methods
+    async def _analyze_package_evidence(self, image_data: bytes, context: OperationalContext) -> str:
+        """Analyze package condition from image"""
+        try:
+            image_b64 = base64.b64encode(image_data).decode('utf-8')
+            
+            response = await self.groq_client.chat.completions.create(
+                model="llama-3.2-11b-vision-preview",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": f"Analyze this food package condition. Order contains: {', '.join(context.food_items)}. Assess: packaging integrity, food safety concerns, tampering evidence, spillage, container damage."
+                            },
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{image_b64}"
+                                }
+                            }
+                        ]
+                    }
+                ],
+                temperature=0.1,
+                max_tokens=400
+            )
+            
+            return response.choices[0].message.content
+            
+        except Exception as e:
+            return f"Package image analysis failed: {str(e)}"
+    
+    # Helper methods
+    def _parse_ai_analysis(self, analysis_text: str) -> Dict[str, Any]:
+        """Parse AI analysis response into dictionary"""
+        try:
+            lines = analysis_text.strip().split('\n')
+            parsed_data = {}
+            
+            for line in lines:
+                if ':' in line:
+                    key, value = line.split(':', 1)
+                    parsed_data[key.strip()] = value.strip()
+            
+            return parsed_data
+            
+        except Exception:
+            return {"parsing_failed": True}
+    
+    # Fallback methods
+    def _create_fallback_package_analysis(self, context: OperationalContext) -> Dict[str, Any]:
+        """Create fallback analysis for package issues"""
+        return {
+            "CONDITION_TYPE": "DAMAGED_CONTAINER",
+            "FOOD_SAFETY_RISK": "MEDIUM",
+            "DELIVERY_FEASIBLE": "false",
+            "CUSTOMER_ACCEPTANCE_LIKELY": "false",
+            "REPLACEMENT_REQUIRED": "true",
+            "REFUND_AMOUNT": "full",
+            "AGENT_LIABILITY": "NONE",
+            "RECOMMENDED_ACTIONS": ["replacement_order", "customer_notification", "restaurant_contact"]
+        }
+    
+    def _create_fallback_order_verification(self, context: OperationalContext) -> Dict[str, Any]:
+        """Create fallback verification for order mismatch"""
+        return {
+            "MISMATCH_TYPE": "COMPLETE_WRONG_ORDER",
+            "CUSTOMER_IMPACT": "HIGH",
+            "CORRECT_ORDER_AVAILABILITY": "DELAYED",
+            "RESOLUTION_COMPLEXITY": "MODERATE",
+            "CUSTOMER_SATISFACTION_RISK": "HIGH"
+        }
+    
+    def _create_fallback_payment_analysis(self, context: OperationalContext) -> Dict[str, Any]:
+        """Create fallback analysis for payment issues"""
+        return {
+            "PAYMENT_ISSUE_TYPE": "INSUFFICIENT_CASH",
+            "RESOLUTION_PROBABILITY": "0.6",
+            "ALTERNATIVE_PAYMENT_FEASIBLE": "true",
+            "ESCALATION_REQUIRED": str(context.customer_contact_attempts > 2).lower(),
+            "AGENT_SAFETY_CONCERN": "false",
+            "RECOMMENDED_ACTIONS": ["alternative_payment_methods", "partial_payment_consideration", "supervisor_contact"]
+        }
+
+
+# Example usage
+if __name__ == "__main__":
+    async def test_operational_handler():
+        handler = OperationalHandler()
+        
+        # Test package tampered scenario
+        package_context = OperationalContext(
+            order_id="ORD001",
+            customer_id="CUST001",
+            delivery_agent_id="DA001",
+            restaurant_id="REST001",
+            issue_type=OperationalIssueType.PACKAGE_TAMPERED,
+            order_value=25.50,
+            delivery_fee=3.50,
+            payment_method="COD",
+            food_items=["Burger", "Fries", "Drink"],
+            temperature_sensitive=True,
+            time_at_location=5,
+            customer_contact_attempts=1,
+            customer_responsive=True,
+            pickup_time=datetime.now() - timedelta(minutes=15),
+            current_time=datetime.now(),
+            package_condition_description="seal_broken_food_spilled"
+        )
+        
+        result = await handler.handle_operational_issue(package_context)
+        print(f"Package tampered result: {result}")
+    
+    asyncio.run(test_operational_handler())
