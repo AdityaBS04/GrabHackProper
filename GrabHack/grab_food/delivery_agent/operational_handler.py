@@ -655,6 +655,256 @@ class OperationalHandler:
             "AGENT_SAFETY_CONCERN": "false",
             "RECOMMENDED_ACTIONS": ["alternative_payment_methods", "partial_payment_consideration", "supervisor_contact"]
         }
+    
+    def handle_payment_discrepancy(self, query: str, order_id: str, customer_id: str, 
+                                 agent_id: str, expected_amount: float) -> str:
+        """
+        Handle strict workflow for payment discrepancy: Customer claims online payment but system shows COD
+        This is the main entry point for delivery agents facing this specific issue
+        """
+        
+        # Step 1: Validate payment status across multiple systems
+        payment_validation = self.validate_payment_status(order_id, customer_id)
+        
+        # Step 2: Get customer credibility score based on payment history
+        credibility_score = self.get_customer_payment_credibility(customer_id)
+        
+        # Step 3: Use GPT reasoning to make final decision
+        decision = self.reason_with_gpt_payment(payment_validation, credibility_score, expected_amount)
+        
+        # Step 4: Generate response based on decision
+        response = self.generate_payment_response(decision, order_id, expected_amount)
+        
+        return response
+    
+    def validate_payment_status(self, order_id: str, customer_id: str) -> str:
+        """Validate payment status across multiple systems"""
+        
+        # In a real system, this would check:
+        # 1. Order management system
+        # 2. Payment gateway logs  
+        # 3. Bank transaction records
+        # 4. Customer app payment history
+        
+        validation_checks = {
+            "order_system_status": self._check_order_system(order_id),
+            "payment_gateway_logs": self._check_payment_gateway(order_id),
+            "bank_transaction_record": self._check_bank_records(customer_id, order_id),
+            "app_payment_history": self._check_app_payments(customer_id, order_id)
+        }
+        
+        # Analyze validation results
+        online_payment_confirmations = 0
+        cod_confirmations = 0
+        
+        for check, result in validation_checks.items():
+            if "ONLINE_PAID" in result:
+                online_payment_confirmations += 1
+            elif "COD_REQUIRED" in result:
+                cod_confirmations += 1
+        
+        # Determine validation result
+        if online_payment_confirmations >= 3:
+            return "CONFIRMED_ONLINE_PAYMENT"
+        elif online_payment_confirmations >= 2:
+            return "LIKELY_ONLINE_PAYMENT"  
+        elif cod_confirmations >= 3:
+            return "CONFIRMED_COD_REQUIRED"
+        elif cod_confirmations >= 2:
+            return "LIKELY_COD_REQUIRED"
+        else:
+            return "PAYMENT_STATUS_UNCLEAR"
+    
+    def _check_order_system(self, order_id: str) -> str:
+        """Check order management system for payment status"""
+        # Simulate database query - in real system would query actual database
+        # Using the order_id pattern to simulate different scenarios for testing
+        if order_id.endswith("001") or order_id.endswith("003"):
+            return "ONLINE_PAID - Payment confirmed in order system"
+        elif order_id.endswith("002") or order_id.endswith("004"):
+            return "COD_REQUIRED - Cash on delivery in order system"
+        else:
+            return "STATUS_UNCLEAR - Order system data inconsistent"
+    
+    def _check_payment_gateway(self, order_id: str) -> str:
+        """Check payment gateway for transaction logs"""
+        # Simulate payment gateway API call
+        if order_id.endswith("001") or order_id.endswith("005"):
+            return "ONLINE_PAID - Transaction found in payment gateway"
+        elif order_id.endswith("002"):
+            return "COD_REQUIRED - No payment transaction found"
+        else:
+            return "STATUS_UNCLEAR - Payment gateway timeout or error"
+    
+    def _check_bank_records(self, customer_id: str, order_id: str) -> str:
+        """Check bank transaction records (simulated)"""
+        # In real system, this would be complex integration with banking APIs
+        if customer_id.endswith("001"):
+            return "ONLINE_PAID - Bank transaction confirmed"
+        elif customer_id.endswith("002"):
+            return "COD_REQUIRED - No bank transaction found"
+        else:
+            return "STATUS_UNCLEAR - Bank records unavailable"
+    
+    def _check_app_payments(self, customer_id: str, order_id: str) -> str:
+        """Check customer app payment history"""
+        # Simulate checking customer's app payment logs
+        if len(customer_id) > 6:  # Simulate established customers
+            return "ONLINE_PAID - Payment shown in customer app"
+        else:
+            return "STATUS_UNCLEAR - App data inconsistent"
+    
+    def get_customer_payment_credibility(self, customer_id: str) -> int:
+        """Calculate customer credibility score for payment disputes (1-10)"""
+        
+        base_score = 6  # Start with neutral credibility
+        
+        # Simulate factors that affect payment credibility:
+        # In real system, these would be database queries
+        
+        # Account age factor
+        if len(customer_id) > 8:  # Simulate older accounts
+            base_score += 2
+        elif len(customer_id) < 5:  # Simulate new accounts  
+            base_score -= 1
+        
+        # Payment history factor (simulated)
+        if customer_id.endswith("001") or customer_id.endswith("003"):
+            base_score += 2  # Good payment history
+        elif customer_id.endswith("999") or customer_id.endswith("000"):
+            base_score -= 3  # Poor payment history
+        
+        # Order frequency factor
+        customer_hash = sum(ord(c) for c in customer_id)
+        if customer_hash % 3 == 0:  # Simulate frequent customers
+            base_score += 1
+        
+        # Previous disputes factor (simulated)
+        if "TEST" in customer_id.upper():
+            base_score -= 2  # Test accounts are less credible
+        
+        return max(1, min(10, base_score))
+    
+    def reason_with_gpt_payment(self, validation_result: str, credibility_score: int, amount: float) -> str:
+        """Use GPT to make final decision on payment discrepancy based on validation and credibility"""
+        
+        reasoning_prompt = f"""
+        Make a final decision on a payment discrepancy complaint based on:
+        
+        System Validation Result: {validation_result}
+        Customer Credibility Score: {credibility_score}/10
+        Order Amount: ${amount}
+        
+        Decision Rules:
+        1. If validation = "CONFIRMED_ONLINE_PAYMENT" AND credibility >= 5: ACCEPT_CUSTOMER_CLAIM
+        2. If validation = "LIKELY_ONLINE_PAYMENT" AND credibility >= 8: ACCEPT_CUSTOMER_CLAIM
+        3. If validation = "LIKELY_ONLINE_PAYMENT" AND credibility < 8: REQUIRE_PAYMENT_PROOF
+        4. If validation = "CONFIRMED_COD_REQUIRED" AND credibility <= 6: COLLECT_COD_PAYMENT
+        5. If validation = "LIKELY_COD_REQUIRED" AND credibility <= 5: COLLECT_COD_PAYMENT
+        6. If validation = "PAYMENT_STATUS_UNCLEAR": ESCALATE_TO_FINANCE
+        
+        Additional considerations:
+        - High amount orders (>$50) require stronger validation
+        - Customer safety and agent protection are priorities
+        
+        Respond with ONLY one of: ACCEPT_CUSTOMER_CLAIM, REQUIRE_PAYMENT_PROOF, COLLECT_COD_PAYMENT, ESCALATE_TO_FINANCE
+        """
+        
+        try:
+            # In a real system, this would call the actual GPT API
+            # For now, implement the decision logic directly
+            
+            if validation_result == "CONFIRMED_ONLINE_PAYMENT" and credibility_score >= 5:
+                return "ACCEPT_CUSTOMER_CLAIM"
+            elif validation_result == "LIKELY_ONLINE_PAYMENT" and credibility_score >= 8:
+                return "ACCEPT_CUSTOMER_CLAIM"
+            elif validation_result == "LIKELY_ONLINE_PAYMENT" and credibility_score < 8:
+                return "REQUIRE_PAYMENT_PROOF"
+            elif validation_result == "CONFIRMED_COD_REQUIRED" and credibility_score <= 6:
+                return "COLLECT_COD_PAYMENT"
+            elif validation_result == "LIKELY_COD_REQUIRED" and credibility_score <= 5:
+                return "COLLECT_COD_PAYMENT"
+            else:
+                return "ESCALATE_TO_FINANCE"
+                
+        except Exception as e:
+            # Default to safest option
+            return "ESCALATE_TO_FINANCE"
+    
+    def generate_payment_response(self, decision: str, order_id: str, amount: float) -> str:
+        """Generate appropriate response based on payment decision"""
+        
+        if decision == "ACCEPT_CUSTOMER_CLAIM":
+            return f"""PAYMENT VERIFICATION COMPLETED [APPROVED]
+            
+Order ID: {order_id}
+Decision: CUSTOMER CLAIM ACCEPTED
+
+Our system validation confirms online payment was processed. You may deliver the order without collecting cash payment.
+
+Actions taken:
+- Payment status verified across multiple systems
+- Order marked as "PAID ONLINE" in delivery system
+- No cash collection required from customer
+
+You can proceed with the delivery. Mark order as completed once delivered."""
+        
+        elif decision == "REQUIRE_PAYMENT_PROOF":
+            return f"""PAYMENT VERIFICATION REQUIRED [WARNING]
+            
+Order ID: {order_id}
+Decision: ADDITIONAL PROOF NEEDED
+
+Please ask the customer to provide proof of online payment before delivering:
+
+Required proof (any ONE of the following):
+1. Screenshot of payment confirmation from their app
+2. Bank SMS/notification showing transaction
+3. Digital payment receipt with transaction ID
+
+If customer provides valid proof: Deliver the order
+If customer cannot provide proof: Collect ${amount:.2f} as COD
+
+Contact support at 1800-GRAB-HELP if customer disputes."""
+        
+        elif decision == "COLLECT_COD_PAYMENT":
+            return f"""CASH COLLECTION REQUIRED [COD]
+            
+Order ID: {order_id}  
+Decision: COLLECT CASH ON DELIVERY
+
+System validation shows this order requires cash payment. Please collect ${amount:.2f} from the customer before delivery.
+
+If customer insists they paid online:
+1. Ask for payment proof (screenshot, SMS, receipt)
+2. If no proof provided, politely explain cash is required
+3. If customer refuses payment, contact support immediately
+
+Do NOT deliver without payment or valid proof. Your safety and company policy are priorities."""
+        
+        else:  # ESCALATE_TO_FINANCE
+            return f"""PAYMENT DISPUTE ESCALATION [URGENT]
+            
+Order ID: {order_id}
+Decision: ESCALATE TO FINANCE TEAM
+
+This payment discrepancy requires immediate escalation due to:
+- Unclear payment status in systems
+- Complex dispute requiring financial investigation
+
+IMMEDIATE ACTIONS:
+1. Do NOT collect cash payment yet
+2. Do NOT deliver the order yet
+3. Call Finance Support: 1800-GRAB-FINANCE
+4. Wait for payment confirmation before proceeding
+
+Provide Finance team with:
+- Order ID: {order_id}
+- Customer claim: "Paid online"
+- System status: "Shows COD"
+- Amount in dispute: ${amount:.2f}
+
+Stay at location until issue is resolved (max 15 minutes)."""
 
 
 # Example usage

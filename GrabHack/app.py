@@ -32,14 +32,27 @@ def init_database():
         )
     ''')
     
-    # Create orders table
+    # Drop existing table and recreate with all required fields
+    cursor.execute('DROP TABLE IF EXISTS orders')
+    
+    # Create orders table with all required fields
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS orders (
+        CREATE TABLE orders (
             id TEXT PRIMARY KEY,
             service TEXT NOT NULL,
             user_type TEXT NOT NULL,
             username TEXT NOT NULL,
             status TEXT NOT NULL,
+            price REAL,
+            start_location TEXT,
+            end_location TEXT,
+            customer_id TEXT,
+            restaurant_id TEXT,
+            driver_id TEXT,
+            restaurant_name TEXT,
+            food_items TEXT,
+            cab_type TEXT,
+            products_ordered TEXT,
             date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             details TEXT
         )
@@ -75,22 +88,59 @@ def init_database():
         demo_users
     )
     
-    # Insert demo orders
+    # Insert demo orders with all new fields
     demo_orders = [
-        ('GF001', 'grab_food', 'customer', 'customer1', 'completed', '2024-09-01', '{"restaurant": "Pizza Palace", "total": 25.50}'),
-        ('GF002', 'grab_food', 'customer', 'customer1', 'in_progress', '2024-09-06', '{"restaurant": "Burger Joint", "total": 18.75}'),
-        ('GC001', 'grab_cabs', 'customer', 'customer1', 'completed', '2024-09-02', '{"from": "Downtown", "to": "Airport", "total": 15.00}'),
-        ('GM001', 'grab_mart', 'customer', 'customer1', 'completed', '2024-09-03', '{"store": "FreshMart", "items": 12, "total": 45.80}'),
-        ('GF003', 'grab_food', 'delivery_agent', 'agent1', 'assigned', '2024-09-06', '{"order_id": "GF002", "pickup": "Burger Joint"}'),
-        ('GF004', 'grab_food', 'restaurant', 'resto1', 'preparing', '2024-09-06', '{"order_id": "GF002", "items": 3}'),
-        ('GC002', 'grab_cabs', 'driver', 'driver1', 'active', '2024-09-06', '{"passenger": "John Doe", "pickup": "Mall"}'),
-        ('GM002', 'grab_mart', 'darkstore', 'store1', 'picking', '2024-09-06', '{"order_id": "GM002", "items": 8}')
+        # Food delivery orders
+        ('GF001', 'grab_food', 'customer', 'customer1', 'completed', 25.50, 
+         'Downtown Plaza', 'Residential Area', 'CUST001', 'REST001', 'DRV001',
+         'Pizza Palace', 'Margherita Pizza Large, Garlic Bread, Coke', None, None,
+         '2024-09-01', '{"restaurant": "Pizza Palace", "total": 25.50}'),
+        
+        ('GF002', 'grab_food', 'customer', 'customer1', 'in_progress', 18.75,
+         'Mall Entrance', 'Office Complex', 'CUST001', 'REST002', 'DRV002',
+         'Burger Joint', 'Classic Burger, Fries, Milkshake', None, None,
+         '2024-09-06', '{"restaurant": "Burger Joint", "total": 18.75}'),
+        
+        # Cab booking orders
+        ('GC001', 'grab_cabs', 'customer', 'customer1', 'completed', 15.00,
+         'Downtown', 'Airport', 'CUST001', None, 'DRV003',
+         None, None, 'Sedan', None,
+         '2024-09-02', '{"from": "Downtown", "to": "Airport", "total": 15.00}'),
+         
+        ('GC002', 'grab_cabs', 'driver', 'driver1', 'active', 8.50,
+         'Mall', 'Central Park', 'CUST002', None, 'DRV001',
+         None, None, 'Hatchback', None,
+         '2024-09-06', '{"passenger": "John Doe", "pickup": "Mall"}'),
+        
+        # Marketplace orders
+        ('GM001', 'grab_mart', 'customer', 'customer1', 'completed', 45.80,
+         'Residential Block', 'Home Address', 'CUST001', 'STORE001', 'DRV004',
+         None, None, None, 'Fresh Vegetables, Dairy Products, Bread, Fruits',
+         '2024-09-03', '{"store": "FreshMart", "items": 12, "total": 45.80}'),
+         
+        ('GM002', 'grab_mart', 'darkstore', 'store1', 'picking', 32.40,
+         'Warehouse District', 'Customer Location', 'CUST003', 'STORE001', None,
+         None, None, None, 'Groceries Pack: Rice, Oil, Spices, Cleaning supplies',
+         '2024-09-06', '{"order_id": "GM002", "items": 8}'),
+        
+        # Additional service provider orders
+        ('GF003', 'grab_food', 'delivery_agent', 'agent1', 'assigned', 0.00,
+         'Restaurant Area', 'Customer Location', None, 'REST002', 'agent1',
+         'Burger Joint', 'Order pickup for delivery', None, None,
+         '2024-09-06', '{"order_id": "GF002", "pickup": "Burger Joint"}'),
+         
+        ('GF004', 'grab_food', 'restaurant', 'resto1', 'preparing', 0.00,
+         'Restaurant Kitchen', 'Ready for Pickup', None, 'resto1', None,
+         'Resto1 Kitchen', 'Order preparation in progress', None, None,
+         '2024-09-06', '{"order_id": "GF002", "items": 3}')
     ]
     
-    cursor.executemany(
-        'INSERT OR IGNORE INTO orders (id, service, user_type, username, status, date, details) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        demo_orders
-    )
+    cursor.executemany('''
+        INSERT OR IGNORE INTO orders 
+        (id, service, user_type, username, status, price, start_location, end_location,
+         customer_id, restaurant_id, driver_id, restaurant_name, food_items, cab_type, products_ordered, date, details) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', demo_orders)
     
     conn.commit()
     conn.close()
@@ -138,8 +188,18 @@ def get_orders(user_type, username):
             'user_type': row[2],
             'username': row[3],
             'status': row[4],
-            'date': row[5],
-            'details': json.loads(row[6] or '{}')
+            'price': row[5],
+            'start_location': row[6],
+            'end_location': row[7],
+            'customer_id': row[8],
+            'restaurant_id': row[9],
+            'driver_id': row[10],
+            'restaurant_name': row[11],
+            'food_items': row[12],
+            'cab_type': row[13],
+            'products_ordered': row[14],
+            'date': row[15],
+            'details': json.loads(row[16] or '{}')
         })
     
     conn.close()
