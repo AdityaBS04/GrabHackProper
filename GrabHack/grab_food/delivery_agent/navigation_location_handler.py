@@ -13,7 +13,6 @@ import base64
 import json
 
 from groq import AsyncGroq
-from ...api_integrations import GoogleMapsAPI, LocationData
 
 
 class NavigationIssueType(Enum):
@@ -62,13 +61,247 @@ class NavigationContext:
 
 
 class NavigationLocationHandler:
-    def __init__(self):
-        self.groq_client = AsyncGroq()
+    def __init__(self, groq_api_key: str = None):
+        self.service = "grab_food"
+        self.actor = "delivery_agent"
         self.max_search_time = 20  # minutes
         self.escalation_threshold = 15  # minutes
+        # Default testing locations
+        self.default_current_location = "Sapna Book Stores, Jayanagar, Bangalore"
+        self.default_destination = "South End Circle Metro, Bangalore"
+    
+    def handle_navigation_issues(self, query: str, image_data: Optional[str] = None) -> str:
+        """Main handler for navigation issues - simple interface for AI engine"""
         
-        # Initialize Google Maps API for address verification and navigation
-        self.maps_api = GoogleMapsAPI()
+        query_lower = query.lower()
+        
+        if any(word in query_lower for word in ['stuck', 'traffic', 'reroute', 'alternative route']):
+            return self.handle_traffic_rerouting(query, image_data)
+        elif any(word in query_lower for word in ['address', 'wrong address', 'find location']):
+            return self.handle_address_issues(query, image_data)
+        elif any(word in query_lower for word in ['gps', 'maps', 'navigation not working']):
+            return self.handle_gps_issues(query, image_data)
+        else:
+            return self.handle_general_navigation(query, image_data)
+    
+    def handle_traffic_rerouting(self, query: str, image_data: Optional[str] = None) -> str:
+        """Handle traffic issues and provide rerouting with Google Maps links"""
+        
+        # Extract locations if mentioned, otherwise use defaults
+        current_location = self._extract_current_location(query) or self.default_current_location
+        destination = self._extract_destination(query) or self.default_destination
+        
+        # Generate Google Maps navigation links
+        maps_link = self._generate_maps_navigation_link(current_location, destination)
+        waze_link = self._generate_waze_navigation_link(current_location, destination)
+        
+        return f"""🚦 **Traffic Rerouting Solution**
+
+**Current Route Issue:** Traffic detected on your current path
+
+**📍 Navigation Links (Click to Open):**
+
+🗺️ **Google Maps Navigation:**
+{maps_link}
+
+🚗 **Waze Alternative Route:**  
+{waze_link}
+
+**📱 Quick Actions:**
+1. **Click the Google Maps link above** - Opens turn-by-turn navigation
+2. **Alternative: Use Waze link** - Often finds faster routes during traffic
+3. **Call Customer:** Inform about delay and new ETA
+
+**⏱️ Route Information:**
+- **From:** {current_location}
+- **To:** {destination}
+- **Route includes:** Real-time traffic data and best alternative paths
+
+**🔄 Additional Options:**
+- **Re-route automatically** using the navigation apps
+- **Avoid toll roads** if selected in app settings  
+- **Motorcycle/bicycle lanes** available if applicable
+
+**📞 Customer Communication:**
+"Hi! I'm rerouting due to traffic to ensure fastest delivery. Your new ETA will be updated in the app. Thank you for your patience!"
+
+**💡 Pro Tip:** Save both links for easy access during delivery!"""
+
+    def handle_address_issues(self, query: str, image_data: Optional[str] = None) -> str:
+        """Handle incorrect or unclear addresses"""
+        
+        current_location = self._extract_current_location(query) or self.default_current_location
+        destination = self._extract_destination(query) or self.default_destination
+        
+        maps_link = self._generate_maps_navigation_link(current_location, destination)
+        
+        return f"""🏠 **Address Resolution Assistant**
+
+**📍 Current Navigation Link:**
+{maps_link}
+
+**🔍 Address Verification Steps:**
+1. **Click the Google Maps link above** for accurate navigation
+2. **Cross-check with customer address** in your delivery app
+3. **Call customer** to confirm exact location
+4. **Request landmark references** (nearby shops, buildings)
+
+**📞 Customer Questions to Ask:**
+- "Can you confirm your complete address with building/flat number?"
+- "What landmarks are nearby your location?"
+- "Can you share your live location via WhatsApp?"
+- "Should I look for any specific building color or sign?"
+
+**🎯 Location Details:**
+- **Your Location:** {current_location}  
+- **Customer Address:** {destination}
+- **Backup Apps:** Use Waze or Apple Maps if Google Maps fails
+
+**⚡ Quick Solutions:**
+- **Meet at landmark:** Ask customer to meet at nearby recognizable place
+- **Building entrance:** For complexes, meet at main gate
+- **Live location:** Request customer to share exact pin location
+
+**🆘 Escalation:** If address cannot be resolved in 15 minutes, contact customer support for assistance."""
+
+    def handle_gps_issues(self, query: str, image_data: Optional[str] = None) -> str:
+        """Handle GPS and navigation app technical problems"""
+        
+        current_location = self._extract_current_location(query) or self.default_current_location
+        destination = self._extract_destination(query) or self.default_destination
+        
+        maps_link = self._generate_maps_navigation_link(current_location, destination)
+        waze_link = self._generate_waze_navigation_link(current_location, destination)
+        
+        return f"""📱 **GPS & Navigation Fix**
+
+**🔧 Immediate Solutions:**
+
+**Primary Navigation Links:**
+🗺️ **Google Maps:** {maps_link}
+🚗 **Waze Backup:** {waze_link}
+
+**📱 Troubleshooting Steps:**
+1. **Click navigation links above** - Works even if your GPS app crashed
+2. **Restart your phone** - Fixes most GPS issues quickly  
+3. **Check location services** - Ensure GPS is enabled
+4. **Clear app cache** - Go to Settings > Apps > Maps > Clear Cache
+
+**🌐 Alternative Navigation:**
+- **Use phone browser** - Navigation links work in any browser
+- **Download offline maps** - Google Maps offline mode
+- **Ask for directions** - Call customer for turn-by-turn guidance
+
+**📍 Current Route:**
+- **From:** {current_location}
+- **To:** {destination}
+
+**⚡ Emergency Options:**
+- **Customer guidance:** Call customer for real-time directions
+- **Local help:** Ask nearby shopkeepers for directions
+- **Voice navigation:** Use hands-free calling with customer
+
+**🔄 Performance Protection:**
+- GPS failures are technical issues (no penalty)
+- Time spent troubleshooting is protected
+- Device replacement available for persistent problems"""
+
+    def handle_general_navigation(self, query: str, image_data: Optional[str] = None) -> str:
+        """General navigation assistance"""
+        
+        current_location = self._extract_current_location(query) or self.default_current_location
+        destination = self._extract_destination(query) or self.default_destination
+        
+        maps_link = self._generate_maps_navigation_link(current_location, destination)
+        
+        return f"""🧭 **Navigation Assistant**
+
+**📍 Your Navigation Link:**
+{maps_link}
+
+**🎯 Current Journey:**
+- **From:** {current_location}
+- **To:** {destination}
+
+**💡 Navigation Tips:**
+1. **Click the link above** - Opens Google Maps with turn-by-turn directions
+2. **Save customer's number** - For easy communication during delivery
+3. **Check traffic before leaving** - Plan your route ahead
+4. **Keep phone charged** - Carry power bank for longer deliveries
+
+**📱 Multi-App Strategy:**
+- **Primary:** Google Maps (most accurate)
+- **Backup:** Waze (better traffic updates)  
+- **Offline:** Download area maps for poor network zones
+
+**🔄 If Navigation Fails:**
+1. Call customer for directions
+2. Ask local shopkeepers  
+3. Use voice calls for real-time guidance
+4. Contact delivery support for assistance
+
+**⭐ Pro Tips:**
+- Learn major landmarks in your delivery area
+- Build relationships with local businesses for directions  
+- Keep multiple navigation apps installed
+- Always inform customer about any delays immediately"""
+    
+    def _extract_current_location(self, query: str) -> Optional[str]:
+        """Extract current location from query if mentioned"""
+        # Look for patterns like "from [location]" or "currently at [location]"
+        import re
+        
+        patterns = [
+            r'(?:from|currently at|at|starting from)\s+([^,]+(?:,\s*[^,]+)*)',
+            r'(?:my location is|i am at|im at)\s+([^,]+(?:,\s*[^,]+)*)'
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, query.lower())
+            if match:
+                return match.group(1).strip()
+        
+        return None
+    
+    def _extract_destination(self, query: str) -> Optional[str]:
+        """Extract destination from query if mentioned"""
+        import re
+        
+        patterns = [
+            r'(?:to|going to|destination|deliver to)\s+([^,]+(?:,\s*[^,]+)*)',
+            r'(?:customer at|address is|location is)\s+([^,]+(?:,\s*[^,]+)*)'
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, query.lower())
+            if match:
+                return match.group(1).strip()
+        
+        return None
+    
+    def _generate_maps_navigation_link(self, origin: str, destination: str) -> str:
+        """Generate Google Maps navigation link"""
+        import urllib.parse
+        
+        # URL encode the locations
+        origin_encoded = urllib.parse.quote(origin)
+        destination_encoded = urllib.parse.quote(destination)
+        
+        # Google Maps navigation URL format
+        maps_url = f"https://www.google.com/maps/dir/{origin_encoded}/{destination_encoded}/"
+        
+        return f"[🗺️ Open Google Maps Navigation]({maps_url})"
+    
+    def _generate_waze_navigation_link(self, origin: str, destination: str) -> str:
+        """Generate Waze navigation link"""
+        import urllib.parse
+        
+        destination_encoded = urllib.parse.quote(destination)
+        
+        # Waze navigation URL format
+        waze_url = f"https://waze.com/ul?q={destination_encoded}&navigate=yes"
+        
+        return f"[🚗 Open Waze Navigation]({waze_url})"
         
     async def handle_navigation_issue(self, context: NavigationContext) -> Dict[str, Any]:
         """Main handler for all navigation and location issues"""

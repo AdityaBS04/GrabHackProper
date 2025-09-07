@@ -8,8 +8,8 @@ from dotenv import load_dotenv
 from models import GrabService, Actor, ACTOR_ISSUE_MAPPING, SERVICE_ACTORS, IssueCategory
 import importlib
 
-# Load environment variables
-load_dotenv()
+# Load environment variables from parent directory
+load_dotenv(dotenv_path="../.env")
 
 app = Flask(__name__)
 CORS(app)
@@ -269,7 +269,7 @@ def submit_complaint():
     
     # Generate AI response using direct AI engine
     try:
-        from enhanced_ai_engine import EnhancedAgenticAIEngine
+        from enhanced_ai_engine_fixed import EnhancedAgenticAIEngine
         ai_engine = EnhancedAgenticAIEngine()
         
         solution = ai_engine.process_complaint(
@@ -277,7 +277,8 @@ def submit_complaint():
             user_query=data['description'],
             service=data['service'],
             user_type=data['user_type'],
-            image_data=data.get('image_data')
+            image_data=data.get('image_data'),
+            username=data.get('username', 'anonymous')
         )
         
         print(f"AI Engine Success: {len(solution)} characters generated")
@@ -301,6 +302,195 @@ def submit_complaint():
     conn.close()
     
     return jsonify({'solution': solution, 'complaint_id': complaint_id})
+
+# Store conversation sessions in memory (in production, use a proper database)
+conversation_sessions = {}
+
+@app.route('/api/chat', methods=['POST'])
+def chat():
+    """Handle chatbot conversation"""
+    data = request.json
+    message = data.get('message', '').strip()
+    service = data.get('service')
+    user_type = data.get('user_type')
+    conversation_id = data.get('conversation_id')
+    category = data.get('category')
+    sub_issue = data.get('sub_issue')
+    username = data.get('username', 'anonymous')
+    previous_messages = data.get('messages', [])
+    
+    if not message or not service or not user_type:
+        return jsonify({'error': 'Missing required fields'}), 400
+    
+    # Initialize or get conversation session
+    if conversation_id not in conversation_sessions:
+        conversation_sessions[conversation_id] = {
+            'service': service,
+            'user_type': user_type,
+            'username': username,
+            'messages': [],
+            'context': {},
+            'current_issue': None,
+            'awaiting_image': False,
+            'category': category,
+            'sub_issue': sub_issue
+        }
+    
+    session = conversation_sessions[conversation_id]
+    session['messages'].append({'role': 'user', 'content': message})
+    
+    try:
+        print(f"DEBUG: Chat request - username={username}, category={category}, sub_issue={sub_issue}")
+        
+        # If we have both category and sub_issue, use conversational AI processing
+        if category and sub_issue:
+            from enhanced_ai_engine_fixed import EnhancedAgenticAIEngine
+            ai_engine = EnhancedAgenticAIEngine()
+            
+            # Build conversation context from previous messages
+            conversation_context = ""
+            for msg in session['messages']:
+                role = "Customer" if msg['role'] == 'user' else "Agent"
+                conversation_context += f"{role}: {msg['content']}\n"
+            
+            # Use conversational processing
+            response = ai_engine.process_conversation(
+                message=message,
+                service=service,
+                user_type=user_type,
+                conversation_history=session['messages'],
+                session_context={
+                    'category': category,
+                    'sub_issue': sub_issue,
+                    'conversation_context': conversation_context,
+                    'username': username
+                }
+            )
+            
+            session['messages'].append({'role': 'assistant', 'content': response.get('text', '')})
+            session['current_issue'] = sub_issue
+            
+            return jsonify({
+                'response': response.get('text', ''),
+                'requires_image': response.get('requires_image', False),
+                'image_request': response.get('image_request'),
+                'conversation_id': conversation_id
+            })
+        
+        else:
+            # Fallback to conversation processing if no specific issue selected
+            from enhanced_ai_engine_fixed import EnhancedAgenticAIEngine
+            ai_engine = EnhancedAgenticAIEngine()
+            
+            # Process conversation with context
+            response = ai_engine.process_conversation(
+                message=message,
+                service=service,
+                user_type=user_type,
+                conversation_history=session['messages'],
+                session_context={**session['context'], 'username': username}
+            )
+            
+            session['messages'].append({'role': 'assistant', 'content': response.get('text', '')})
+            
+            # Update session context based on response
+            if 'requires_image' in response:
+                session['awaiting_image'] = response['requires_image']
+                session['current_issue'] = response.get('issue_type')
+            
+            return jsonify({
+                'response': response.get('text', ''),
+                'requires_image': response.get('requires_image', False),
+                'image_request': response.get('image_request'),
+                'conversation_id': conversation_id
+            })
+        
+    except Exception as e:
+        print(f"Chat error: {e}")
+        import traceback
+        traceback.print_exc()
+        
+        fallback_response = "I apologize, but I'm having trouble processing your request right now. Could you please rephrase your question or provide more details about your issue?"
+        
+        return jsonify({
+            'response': fallback_response,
+            'requires_image': False,
+            'conversation_id': conversation_id
+        })
+
+@app.route('/api/chat/image', methods=['POST'])
+def chat_image():
+    """Handle image uploads in chat context"""
+    data = request.json
+    image_data = data.get('image_data')
+    service = data.get('service')
+    user_type = data.get('user_type')
+    conversation_id = data.get('conversation_id')
+    
+    if not image_data or not conversation_id:
+        return jsonify({'error': 'Missing required fields'}), 400
+    
+    if conversation_id not in conversation_sessions:
+        return jsonify({'error': 'Invalid conversation session'}), 400
+    
+    session = conversation_sessions[conversation_id]
+    
+    try:
+        # Use the enhanced AI engine to process image
+        from enhanced_ai_engine_fixed import EnhancedAgenticAIEngine
+        ai_engine = EnhancedAgenticAIEngine()
+        
+        # If we have a specific issue, use direct processing
+        if session.get('sub_issue'):
+            # Get the last user message for context
+            user_messages = [msg['content'] for msg in session['messages'] if msg['role'] == 'user']
+            last_user_message = user_messages[-1] if user_messages else "Please help me with this issue"
+            
+            response_text = ai_engine.process_complaint(
+                function_name=session['sub_issue'],
+                user_query=last_user_message,
+                service=service,
+                user_type=user_type,
+                image_data=image_data,
+                username=session.get('username', 'anonymous')
+            )
+            
+            session['messages'].append({'role': 'assistant', 'content': response_text})
+            session['awaiting_image'] = False
+            
+            return jsonify({
+                'response': response_text,
+                'requires_image': False,
+                'conversation_id': conversation_id
+            })
+        
+        else:
+            # Process image with conversation context
+            response = ai_engine.process_conversation_image(
+                image_data=image_data,
+                service=service,
+                user_type=user_type,
+                conversation_history=session['messages'],
+                current_issue=session.get('current_issue'),
+                session_context=session['context']
+            )
+            
+            session['messages'].append({'role': 'assistant', 'content': response.get('text', '')})
+            session['awaiting_image'] = False
+            
+            return jsonify({
+                'response': response.get('text', ''),
+                'requires_image': False,
+                'conversation_id': conversation_id
+            })
+        
+    except Exception as e:
+        print(f"Chat image error: {e}")
+        return jsonify({
+            'response': "Thank you for uploading the image. I'm analyzing it now and will provide a solution shortly.",
+            'requires_image': False,
+            'conversation_id': conversation_id
+        })
 
 def generate_ai_solution(complaint_data):
     """Generate AI solution using the actual handler methods with image support"""
@@ -360,7 +550,7 @@ def generate_ai_solution(complaint_data):
                     
                 # If we reach here, try direct AI processing
                 print("Attempting direct AI engine call...")
-                from enhanced_ai_engine import EnhancedAgenticAIEngine
+                from enhanced_ai_engine_fixed import EnhancedAgenticAIEngine
                 ai_engine = EnhancedAgenticAIEngine()
                 
                 direct_result = ai_engine.process_complaint(
@@ -391,7 +581,7 @@ def generate_ai_solution(complaint_data):
     # If everything fails, use direct AI call
     print("All methods failed, trying final direct AI call...")
     try:
-        from enhanced_ai_engine import EnhancedAgenticAIEngine
+        from enhanced_ai_engine_fixed import EnhancedAgenticAIEngine
         ai_engine = EnhancedAgenticAIEngine()
         
         final_result = ai_engine.process_complaint(
