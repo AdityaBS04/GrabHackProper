@@ -1,111 +1,126 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
+import '../Mobile.css';
 
 const Login = () => {
-  const [userType, setUserType] = useState('');
   const [credentials, setCredentials] = useState({ username: '', password: '' });
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-
-  const userTypes = [
-    { id: 'customer', name: 'Customer', services: ['grab_food', 'grab_cabs', 'grab_mart'] },
-    { id: 'delivery_agent', name: 'Delivery Agent', services: ['grab_food', 'grab_mart'] },
-    { id: 'restaurant', name: 'Restaurant', services: ['grab_food'] },
-    { id: 'driver', name: 'Driver', services: ['grab_cabs'] },
-    { id: 'darkstore', name: 'Dark Store', services: ['grab_mart'] }
-  ];
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    if (!userType) {
-      setError('Please select a user type');
-      return;
-    }
+    setLoading(true);
+    setError('');
 
     try {
       const response = await api.post('/login', {
-        user_type: userType,
         username: credentials.username,
         password: credentials.password
       });
 
       if (response.data.success) {
+        const userData = response.data.user;
         localStorage.setItem('user', JSON.stringify({
-          type: userType,
-          username: credentials.username,
-          services: userTypes.find(type => type.id === userType).services
+          id: userData.id,
+          type: userData.user_type,
+          username: userData.username,
+          credibility_score: userData.credibility_score,
+          services: userData.services
         }));
         navigate('/dashboard');
       }
     } catch (error) {
-      setError('Invalid credentials or server error');
+      setError(error.response?.data?.message || 'Invalid username or password');
     }
+    setLoading(false);
   };
 
   return (
-    <div className="container">
-      <div className="header">
-        <h1>GrabHack Customer Service Platform</h1>
-        <p>Select your role and login to continue</p>
-      </div>
+    <div className="App">
+      <div className="mobile-container">
+        <div className="mobile-header">
+          <h1>🚀 GrabHack</h1>
+          <p>AI-Powered Customer Service Platform</p>
+        </div>
 
-      <div className="card" style={{ maxWidth: '500px', margin: '0 auto' }}>
-        <h2 style={{ textAlign: 'center', marginBottom: '30px' }}>Login</h2>
+        <div className="mobile-card">
+          <h2 style={{ textAlign: 'center', marginBottom: '24px', fontSize: '28px', fontWeight: '700', color: '#333' }}>
+            Welcome Back
+          </h2>
+          <p style={{ textAlign: 'center', marginBottom: '32px', color: '#6c757d' }}>
+            Sign in to your account
+          </p>
 
-        {error && <div className="error-message">{error}</div>}
+          {error && <div className="mobile-error-message">{error}</div>}
 
-        <form onSubmit={handleLogin}>
-          <div className="form-group">
-            <label className="form-label">Select User Type</label>
-            <div className="service-grid">
-              {userTypes.map(type => (
-                <div
-                  key={type.id}
-                  className={`service-card ${userType === type.id ? 'selected' : ''}`}
-                  onClick={() => setUserType(type.id)}
-                >
-                  <h3>{type.name}</h3>
-                  <p>Services: {type.services.map(s => s.replace('_', ' ')).join(', ')}</p>
-                </div>
-              ))}
+          <form onSubmit={handleLogin}>
+            <div className="mobile-form-group">
+              <label className="mobile-form-label">Username</label>
+              <input
+                type="text"
+                className="mobile-form-input"
+                placeholder="Enter your username"
+                value={credentials.username}
+                onChange={(e) => setCredentials({...credentials, username: e.target.value})}
+                required
+                autoComplete="username"
+              />
             </div>
+
+            <div className="mobile-form-group">
+              <label className="mobile-form-label">Password</label>
+              <input
+                type="password"
+                className="mobile-form-input"
+                placeholder="Enter your password"
+                value={credentials.password}
+                onChange={(e) => setCredentials({...credentials, password: e.target.value})}
+                required
+                autoComplete="current-password"
+              />
+            </div>
+
+            <button 
+              type="submit" 
+              className="mobile-btn mobile-btn-primary"
+              disabled={loading || !credentials.username || !credentials.password}
+            >
+              {loading ? (
+                <>
+                  <div className="mobile-spinner" style={{ width: '20px', height: '20px', marginRight: '8px' }}></div>
+                  Signing In...
+                </>
+              ) : (
+                'Sign In'
+              )}
+            </button>
+          </form>
+        </div>
+
+        <div className="mobile-demo-info">
+          <h4>Demo Accounts</h4>
+          <div className="mobile-demo-item">
+            <span>Customer</span>
+            <strong>customer1 / pass123</strong>
           </div>
-
-          <div className="form-group">
-            <label className="form-label">Username</label>
-            <input
-              type="text"
-              className="form-input"
-              value={credentials.username}
-              onChange={(e) => setCredentials({...credentials, username: e.target.value})}
-              required
-            />
+          <div className="mobile-demo-item">
+            <span>Delivery Agent</span>
+            <strong>agent1 / pass123</strong>
           </div>
-
-          <div className="form-group">
-            <label className="form-label">Password</label>
-            <input
-              type="password"
-              className="form-input"
-              value={credentials.password}
-              onChange={(e) => setCredentials({...credentials, password: e.target.value})}
-              required
-            />
+          <div className="mobile-demo-item">
+            <span>Restaurant</span>
+            <strong>resto1 / pass123</strong>
           </div>
-
-          <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>
-            Login
-          </button>
-        </form>
-
-        <div style={{ marginTop: '20px', padding: '15px', background: '#f8f9fa', borderRadius: '8px' }}>
-          <h4>Demo Credentials:</h4>
-          <p><strong>Customer:</strong> customer1 / pass123</p>
-          <p><strong>Delivery Agent:</strong> agent1 / pass123</p>
-          <p><strong>Restaurant:</strong> resto1 / pass123</p>
-          <p><strong>Driver:</strong> driver1 / pass123</p>
-          <p><strong>Dark Store:</strong> store1 / pass123</p>
+          <div className="mobile-demo-item">
+            <span>Driver</span>
+            <strong>driver1 / pass123</strong>
+          </div>
+          <div className="mobile-demo-item">
+            <span>Dark Store</span>
+            <strong>store1 / pass123</strong>
+          </div>
         </div>
       </div>
     </div>

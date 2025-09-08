@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
+import '../Mobile.css';
 
 const Dashboard = () => {
   const [user, setUser] = useState(null);
@@ -40,75 +41,112 @@ const Dashboard = () => {
 
   if (!user) return <div>Loading...</div>;
 
+  const getUserTypeDisplay = (type) => {
+    const typeMap = {
+      'customer': '👤 Customer',
+      'delivery_agent': '🏍️ Delivery Agent', 
+      'restaurant': '🍳 Restaurant',
+      'driver': '🚗 Driver',
+      'darkstore': '🏪 Dark Store'
+    };
+    return typeMap[type] || type;
+  };
+
+  const getServiceEmoji = (service) => {
+    const serviceMap = {
+      'grab_food': '🍕',
+      'grab_cabs': '🚗',
+      'grab_mart': '🛒'
+    };
+    return serviceMap[service] || '📱';
+  };
+
+  const getStatusClass = (status) => {
+    switch(status) {
+      case 'completed': return 'completed';
+      case 'in_progress': 
+      case 'assigned':
+      case 'delivering': 
+      case 'preparing': return 'in_progress';
+      case 'cancelled': return 'cancelled';
+      default: return 'in_progress';
+    }
+  };
+
   return (
-    <div className="container">
-      <div className="header">
-        <h1>Welcome, {user.username}</h1>
-        <p>User Type: {user.type.replace('_', ' ').toUpperCase()}</p>
-        <button className="btn btn-secondary" onClick={handleLogout} style={{ float: 'right' }}>
-          Logout
-        </button>
-      </div>
-
-      <div className="card">
-        <h2>Available Services</h2>
-        <div className="service-grid">
-          {user.services.map(service => (
-            <div key={service} className="service-card" onClick={() => handleComplaint(service)}>
-              <h3>{service.replace('_', ' ').toUpperCase()}</h3>
-              <p>Click to submit a complaint</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="card">
-        <h2>Your Orders/Activities</h2>
-        {orders.length === 0 ? (
-          <p>No orders found</p>
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ borderBottom: '2px solid #dee2e6' }}>
-                  <th style={{ padding: '10px', textAlign: 'left' }}>Order ID</th>
-                  <th style={{ padding: '10px', textAlign: 'left' }}>Service</th>
-                  <th style={{ padding: '10px', textAlign: 'left' }}>Status</th>
-                  <th style={{ padding: '10px', textAlign: 'left' }}>Date</th>
-                  <th style={{ padding: '10px', textAlign: 'left' }}>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {orders.map(order => (
-                  <tr key={order.id} style={{ borderBottom: '1px solid #dee2e6' }}>
-                    <td style={{ padding: '10px' }}>{order.id}</td>
-                    <td style={{ padding: '10px' }}>{order.service}</td>
-                    <td style={{ padding: '10px' }}>
-                      <span style={{ 
-                        padding: '4px 8px', 
-                        borderRadius: '4px', 
-                        backgroundColor: order.status === 'completed' ? '#d4edda' : '#fff3cd',
-                        color: order.status === 'completed' ? '#155724' : '#856404'
-                      }}>
-                        {order.status}
-                      </span>
-                    </td>
-                    <td style={{ padding: '10px' }}>{new Date(order.date).toLocaleDateString()}</td>
-                    <td style={{ padding: '10px' }}>
-                      <button 
-                        className="btn btn-secondary" 
-                        onClick={() => handleComplaint(order.service)}
-                        style={{ padding: '6px 12px', fontSize: '14px' }}
-                      >
-                        Report Issue
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+    <div className="App">
+      <div className="mobile-container">
+        <div className="mobile-header">
+          <button className="mobile-header-icon-btn" onClick={handleLogout}>
+            ←
+          </button>
+          <div className="mobile-header-content">
+            <h1>Hello, {user.username}!</h1>
+            <p>{getUserTypeDisplay(user.type)}</p>
           </div>
-        )}
+        </div>
+
+        <div className="mobile-card">
+          <h2>📋 Your Orders & Activities</h2>
+          {orders.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px 20px', color: '#6c757d' }}>
+              <div style={{ fontSize: '48px', marginBottom: '16px' }}>📦</div>
+              <p>No orders found</p>
+              <p style={{ fontSize: '14px', opacity: 0.8 }}>Your order history will appear here</p>
+            </div>
+          ) : (
+            <div className="mobile-orders-container">
+              {orders.map(order => (
+                <div key={order.id} className="mobile-order-card">
+                  <div className="mobile-order-header">
+                    <div className="mobile-order-id">
+                      {getServiceEmoji(order.service)} {order.id}
+                    </div>
+                    <div className={`mobile-order-status ${getStatusClass(order.status)}`}>
+                      {order.status.replace('_', ' ')}
+                    </div>
+                  </div>
+                  
+                  <div className="mobile-order-details">
+                    <div><strong>Service:</strong> {order.service.replace('_', ' ')}</div>
+                    <div><strong>Date:</strong> {new Date(order.date).toLocaleDateString()}</div>
+                    {order.price && (
+                      <div><strong>Price:</strong> ${order.price.toFixed(2)}</div>
+                    )}
+                    {order.payment_method && (
+                      <div><strong>Payment:</strong> {order.payment_method.toUpperCase()}</div>
+                    )}
+                  </div>
+
+                  {order.restaurant_name && (
+                    <div style={{ fontSize: '14px', color: '#6c757d', marginBottom: '12px' }}>
+                      🍳 {order.restaurant_name}
+                    </div>
+                  )}
+                  
+                  <button 
+                    className="mobile-btn mobile-btn-secondary mobile-btn-small"
+                    onClick={() => handleComplaint(order.service)}
+                  >
+                    🆘 Report Issue
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="mobile-card">
+          <h2>🆘 Report Issues</h2>
+          <div className="mobile-service-grid">
+            {user.services.map(service => (
+              <div key={service} className="mobile-service-card" onClick={() => handleComplaint(service)}>
+                <h3>{getServiceEmoji(service)} {service.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</h3>
+                <p>Tap to get AI support</p>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );

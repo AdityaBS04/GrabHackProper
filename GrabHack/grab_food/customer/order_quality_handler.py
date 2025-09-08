@@ -130,25 +130,187 @@ class OrderQualityHandler:
             return "INSUFFICIENT_EVIDENCE"
     
     def get_customer_credibility_score(self, username: str) -> int:
-        """Calculate customer credibility score based on history"""
-        # In a real system, this would check customer database
-        # For now, simulate based on username patterns
+        """Calculate customer credibility score based on actual database history"""
+        import sqlite3
+        import os
+        from datetime import datetime, timedelta
         
         base_score = 7  # Start with neutral-high credibility
         
-        # Simulate factors that affect credibility:
-        if username == "anonymous":
-            base_score -= 2  # Anonymous users get lower credibility
+        # Handle anonymous users
+        if not username or username == "anonymous":
+            return max(1, base_score - 2)
+        
+        try:
+            # Find database path
+            database_paths = [
+                'grabhack.db',
+                '../grabhack.db', 
+                'GrabHack/grabhack.db',
+                os.path.join(os.path.dirname(__file__), '../../grabhack.db')
+            ]
+            
+            db_path = None
+            for path in database_paths:
+                if os.path.exists(path):
+                    db_path = path
+                    break
+            
+            if not db_path:
+                # Fallback to simulated scoring if no database
+                return self._get_simulated_credibility_score(username)
+            
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            
+            # Get user's current credibility score from users table
+            cursor.execute('''
+                SELECT credibility_score 
+                FROM users 
+                WHERE username = ?
+            ''', (username,))
+            
+            user_result = cursor.fetchone()
+            if user_result:
+                base_score = user_result[0]
+            else:
+                base_score = 7  # Default if user not found
+            
+            # Get user's order history from the new database schema
+            cursor.execute('''
+                SELECT 
+                    COUNT(*) as total_orders,
+                    COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_orders,
+                    COUNT(CASE WHEN status = 'cancelled' THEN 1 END) as cancelled_orders,
+                    AVG(price) as avg_order_value,
+                    MIN(date) as first_order_date,
+                    MAX(date) as last_order_date
+                FROM orders 
+                WHERE username = ? AND service = 'grab_food' AND user_type = 'customer'
+            ''', (username,))
+            
+            result = cursor.fetchone()
+            if result:
+                total_orders, completed_orders, cancelled_orders, avg_order_value, first_order_date, last_order_date = result
+                
+                # Calculate credibility based on actual data
+                if total_orders > 0:
+                    completion_rate = completed_orders / total_orders
+                    cancellation_rate = cancelled_orders / total_orders if total_orders > 0 else 0
+                    
+                    # Adjust score based on completion rate
+                    if completion_rate >= 0.9:
+                        base_score += 2
+                    elif completion_rate >= 0.7:
+                        base_score += 1
+                    elif completion_rate < 0.5:
+                        base_score -= 2
+                    
+                    # Adjust based on cancellation rate
+                    if cancellation_rate > 0.3:
+                        base_score -= 2
+                    elif cancellation_rate > 0.2:
+                        base_score -= 1
+                    
+                    # Adjust based on order frequency (established customer)
+                    if total_orders >= 20:
+                        base_score += 2
+                    elif total_orders >= 10:
+                        base_score += 1
+                    
+                    # Adjust based on average order value (higher value = more credible)
+                    if avg_order_value and avg_order_value >= 50:
+                        base_score += 1
+                    elif avg_order_value and avg_order_value >= 30:
+                        base_score += 0.5
+                    
+                    # Account tenure bonus
+                    if first_order_date:
+                        try:
+                            first_date = datetime.strptime(first_order_date, '%Y-%m-%d')
+                            days_since_first = (datetime.now() - first_date).days
+                            if days_since_first > 365:  # More than a year
+                                base_score += 1
+                            elif days_since_first > 180:  # More than 6 months
+                                base_score += 0.5
+                        except:
+                            pass  # Date parsing failed, skip tenure bonus
+            
+            # Check for recent complaint history
+            cursor.execute('''
+                SELECT COUNT(*) 
+                FROM complaints 
+                WHERE username = ? AND service = 'grab_food' 
+                AND created_at >= datetime('now', '-30 days')
+            ''', (username,))
+            
+            recent_complaints = cursor.fetchone()[0] if cursor.fetchone() else 0
+            if recent_complaints > 5:
+                base_score -= 2
+            elif recent_complaints > 2:
+                base_score -= 1
+            
+            conn.close()
+            
+        except Exception as e:
+            logger.error(f"Error calculating credibility score: {e}")
+            # Fallback to simulated scoring
+            return self._get_simulated_credibility_score(username)
+        
+        # Ensure score is between 1-10
+        final_score = max(1, min(10, int(base_score)))
+        
+        # Update the credibility score in the database if it has changed significantly
+        self._update_credibility_score_if_changed(username, final_score)
+        
+        return final_score
+    
+    def _update_credibility_score_if_changed(self, username: str, new_score: int) -> None:
+        """Update user's credibility score in database if it has changed"""
+        try:
+            # Find database path
+            database_paths = [
+                'grabhack.db',
+                '../grabhack.db', 
+                'GrabHack/grabhack.db',
+                os.path.join(os.path.dirname(__file__), '../../grabhack.db')
+            ]
+            
+            db_path = None
+            for path in database_paths:
+                if os.path.exists(path):
+                    db_path = path
+                    break
+            
+            if not db_path:
+                return
+            
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            
+            # Update the credibility score
+            cursor.execute('''
+                UPDATE users 
+                SET credibility_score = ?
+                WHERE username = ?
+            ''', (new_score, username))
+            
+            conn.commit()
+            conn.close()
+            
+        except Exception as e:
+            logger.error(f"Error updating credibility score: {e}")
+    
+    def _get_simulated_credibility_score(self, username: str) -> int:
+        """Fallback simulated credibility scoring when database is unavailable"""
+        base_score = 7
         
         if "test" in username.lower():
-            base_score -= 1  # Test accounts are less credible
-            
-        # Simulate order history (would query database in real system)
-        # For demo purposes, use simple logic
-        if len(username) > 8:  # Longer usernames = more established users
+            base_score -= 1
+        
+        if len(username) > 8:
             base_score += 1
             
-        # Ensure score is between 1-10
         return max(1, min(10, base_score))
     
     def reason_with_gpt_quality(self, validation_result: str, credibility_score: int) -> str:

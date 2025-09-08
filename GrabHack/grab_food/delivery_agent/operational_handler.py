@@ -716,8 +716,81 @@ class OperationalHandler:
             return "PAYMENT_STATUS_UNCLEAR"
     
     def _check_order_system(self, order_id: str) -> str:
-        """Check order management system for payment status"""
-        # Simulate database query - in real system would query actual database
+        """Check order management system for payment status using actual database"""
+        import sqlite3
+        import os
+        import json
+        
+        try:
+            # Find database path
+            database_paths = [
+                'grabhack.db',
+                '../grabhack.db', 
+                'GrabHack/grabhack.db',
+                os.path.join(os.path.dirname(__file__), '../../grabhack.db')
+            ]
+            
+            db_path = None
+            for path in database_paths:
+                if os.path.exists(path):
+                    db_path = path
+                    break
+            
+            if not db_path:
+                return self._simulate_order_system_check(order_id)
+            
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            
+            # Query the actual order from database
+            cursor.execute('''
+                SELECT id, status, details, price, user_type, payment_method 
+                FROM orders 
+                WHERE id = ? AND service = 'grab_food'
+            ''', (order_id,))
+            
+            result = cursor.fetchone()
+            conn.close()
+            
+            if result:
+                order_id_db, status, details, price, user_type, payment_method = result
+                
+                # Use the payment_method column first
+                if payment_method:
+                    if payment_method.lower() in ['card', 'online', 'upi', 'wallet']:
+                        return "ONLINE_PAID - Payment confirmed in order system"
+                    elif payment_method.lower() == 'cod':
+                        return "COD_REQUIRED - Cash on delivery in order system"
+                
+                # Fallback: parse details JSON for payment method
+                if details:
+                    try:
+                        details_json = json.loads(details)
+                        payment_method_details = details_json.get('payment_method')
+                        if payment_method_details:
+                            if payment_method_details.lower() in ['card', 'online', 'upi', 'wallet']:
+                                return "ONLINE_PAID - Payment confirmed in order system"
+                            elif payment_method_details.lower() == 'cod':
+                                return "COD_REQUIRED - Cash on delivery in order system"
+                    except:
+                        pass
+                
+                # Final fallback: use status and price to infer payment
+                if status == 'completed' and price and price > 0:
+                    return "ONLINE_PAID - Payment confirmed in order system"
+                elif price and price > 0:
+                    return "COD_REQUIRED - Cash on delivery in order system"
+                else:
+                    return "STATUS_UNCLEAR - Order system data inconsistent"
+            else:
+                return "STATUS_UNCLEAR - Order not found in system"
+                
+        except Exception as e:
+            # Fallback to simulation if database access fails
+            return self._simulate_order_system_check(order_id)
+    
+    def _simulate_order_system_check(self, order_id: str) -> str:
+        """Fallback simulation when database is unavailable"""
         # Using the order_id pattern to simulate different scenarios for testing
         if order_id.endswith("001") or order_id.endswith("003"):
             return "ONLINE_PAID - Payment confirmed in order system"

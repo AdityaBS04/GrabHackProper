@@ -659,6 +659,7 @@ Thank you for your patience as we ensure you receive the best possible resolutio
             selected_issue = session_context.get('sub_issue')
             conversation_context = session_context.get('conversation_context', '')
             username = session_context.get('username', 'anonymous')
+            user_orders = session_context.get('user_orders', '')
             
             print(f"DEBUG: process_conversation called with selected_issue={selected_issue}, username={username}")
             
@@ -680,23 +681,29 @@ Thank you for your patience as we ensure you receive the best possible resolutio
                 prompt = f"""
                 You are a conversational {service.replace('_', ' ').title()} customer service agent handling: {selected_issue.replace('_', ' ').title()}
                 
+                CUSTOMER ORDER DATA:
+                {user_orders}
+                
                 CONVERSATION SO FAR:
                 {conversation_context}
                 
                 Current customer message: "{message}"
                 
                 Your job is to:
-                1. Have a natural conversation with the customer
-                2. Ask clarifying questions if needed
-                3. Detect if their complaint seems genuine or suspicious
-                4. Request images when you need visual evidence
-                5. If something seems fishy, ask more questions or escalate to human support
+                1. Use the customer's order data to provide personalized assistance
+                2. Reference specific orders when relevant to their complaint
+                3. Have a natural conversation with the customer
+                4. Ask clarifying questions if needed (but check order data first)
+                5. Detect if their complaint seems genuine or suspicious based on order history
+                6. Request images when you need visual evidence
+                7. If something seems fishy, ask more questions or escalate to human support
                 
                 Respond naturally and conversationally. Examples:
-                - "Can you tell me more about what exactly happened?"
-                - "I'd like to see a photo of the issue to help you better"
-                - "Based on what you're describing, let me check what we can do for you"
-                - "I notice something doesn't quite match up - could you clarify [specific concern]?"
+                - "I see you ordered [specific item] from [restaurant] on [date]. Can you tell me more about what exactly happened?"
+                - "Looking at your order [order_id], I'd like to see a photo of the issue to help you better"
+                - "I can see from your order history that you ordered [details]. Based on what you're describing, let me check what we can do for you"
+                - "I notice something doesn't quite match up with your order [order_id] - could you clarify [specific concern]?"
+                - "I see this is about your recent order from [restaurant]. Let me help you resolve this issue."
                 
                 Respond with a JSON object:
                 {{
@@ -844,24 +851,31 @@ Thank you for your patience as we ensure you receive the best possible resolutio
             current_issue = current_issue or session_context.get('sub_issue')
             
             # Use conversational fraud detection approach
+            # Get user orders from session context
+            user_orders = session_context.get('user_orders', '')
+            
             prompt = f"""
             You are a conversational {service.replace('_', ' ').title()} customer service agent analyzing an image for: {current_issue.replace('_', ' ').title() if current_issue else 'customer issue'}
+            
+            CUSTOMER ORDER DATA:
+            {user_orders}
             
             CONVERSATION SO FAR:
             {conversation_context}
             
             The customer has uploaded an image. Your job is to:
-            1. Describe what you see in the image conversationally
-            2. Check if the image matches their complaint
-            3. If it matches and seems genuine, help them resolve it
-            4. If it doesn't match or seems suspicious, ask questions or escalate
-            5. Be conversational and natural, not formal
+            1. Use the customer's order data to verify the complaint
+            2. Describe what you see in the image conversationally
+            3. Check if the image matches their complaint and order details
+            4. If it matches and seems genuine, help them resolve it
+            5. If it doesn't match or seems suspicious, ask questions or escalate
+            6. Be conversational and natural, not formal
             
             Examples of responses:
-            - "I can see [description] in your photo. This definitely looks like [issue]. Let me help you resolve this..."
-            - "Looking at your image, I notice [observation]. However, this doesn't quite match what you described. Could you clarify [question]?"
-            - "I see [description], but I'm having trouble understanding how this relates to your complaint about [issue]. Can you help me understand?"
-            - "Based on what I see, I think it's best to connect you with our specialized team who can look into this more thoroughly."
+            - "I can see [description] in your photo from your order [order_id] at [restaurant]. This definitely looks like [issue]. Let me help you resolve this..."
+            - "Looking at your image and your order details, I notice [observation]. However, this doesn't quite match what you described. Could you clarify [question]?"
+            - "I see [description], but comparing this to your order [order_id] for [items], I'm having trouble understanding how this relates to your complaint. Can you help me understand?"
+            - "Based on what I see and your order history, I think it's best to connect you with our specialized team who can look into this more thoroughly."
             
             Respond with JSON:
             {{

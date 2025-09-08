@@ -75,21 +75,35 @@ class NavigationLocationHandler:
         
         query_lower = query.lower()
         
+        # Try to extract order details for better navigation assistance
+        order_details = self._get_order_details_from_query(query)
+        
         if any(word in query_lower for word in ['stuck', 'traffic', 'reroute', 'alternative route']):
-            return self.handle_traffic_rerouting(query, image_data)
+            return self.handle_traffic_rerouting(query, image_data, order_details)
         elif any(word in query_lower for word in ['address', 'wrong address', 'find location']):
-            return self.handle_address_issues(query, image_data)
+            return self.handle_address_issues(query, image_data, order_details)
         elif any(word in query_lower for word in ['gps', 'maps', 'navigation not working']):
-            return self.handle_gps_issues(query, image_data)
+            return self.handle_gps_issues(query, image_data, order_details)
         else:
-            return self.handle_general_navigation(query, image_data)
+            return self.handle_general_navigation(query, image_data, order_details)
     
-    def handle_traffic_rerouting(self, query: str, image_data: Optional[str] = None) -> str:
+    def handle_traffic_rerouting(self, query: str, image_data: Optional[str] = None, order_details: Optional[Dict] = None) -> str:
         """Handle traffic issues and provide rerouting with Google Maps links"""
         
-        # Extract locations if mentioned, otherwise use defaults
-        current_location = self._extract_current_location(query) or self.default_current_location
-        destination = self._extract_destination(query) or self.default_destination
+        # Extract locations from query, order details, or use defaults
+        current_location = self._extract_current_location(query)
+        destination = self._extract_destination(query)
+        
+        # Use order details if available and locations not found in query
+        if order_details:
+            if not current_location:
+                current_location = order_details.get('start_location') or order_details.get('restaurant_name')
+            if not destination:
+                destination = order_details.get('end_location')
+        
+        # Fall back to defaults if still not found
+        current_location = current_location or self.default_current_location
+        destination = destination or self.default_destination
         
         # Generate Google Maps navigation links
         maps_link = self._generate_maps_navigation_link(current_location, destination)
@@ -127,11 +141,25 @@ class NavigationLocationHandler:
 
 **💡 Pro Tip:** Save both links for easy access during delivery!"""
 
-    def handle_address_issues(self, query: str, image_data: Optional[str] = None) -> str:
+    def handle_address_issues(self, query: str, image_data: Optional[str] = None, order_details: Optional[Dict] = None) -> str:
         """Handle incorrect or unclear addresses"""
         
-        current_location = self._extract_current_location(query) or self.default_current_location
-        destination = self._extract_destination(query) or self.default_destination
+        # Extract locations from query, order details, or use defaults
+        current_location = self._extract_current_location(query)
+        destination = self._extract_destination(query)
+        
+        # Use order details if available
+        order_info = ""
+        if order_details:
+            if not current_location:
+                current_location = order_details.get('start_location') or order_details.get('restaurant_name')
+            if not destination:
+                destination = order_details.get('end_location')
+            order_info = f"\n**📋 Order Info:**\n- Order ID: {order_details.get('order_id', 'N/A')}\n- Restaurant: {order_details.get('restaurant_name', 'N/A')}\n- Payment: {order_details.get('payment_method', 'N/A')}\n"
+        
+        # Fall back to defaults if still not found
+        current_location = current_location or self.default_current_location
+        destination = destination or self.default_destination
         
         maps_link = self._generate_maps_navigation_link(current_location, destination)
         
@@ -164,7 +192,7 @@ class NavigationLocationHandler:
 
 **🆘 Escalation:** If address cannot be resolved in 15 minutes, contact customer support for assistance."""
 
-    def handle_gps_issues(self, query: str, image_data: Optional[str] = None) -> str:
+    def handle_gps_issues(self, query: str, image_data: Optional[str] = None, order_details: Optional[Dict] = None) -> str:
         """Handle GPS and navigation app technical problems"""
         
         current_location = self._extract_current_location(query) or self.default_current_location
@@ -206,7 +234,7 @@ class NavigationLocationHandler:
 - Time spent troubleshooting is protected
 - Device replacement available for persistent problems"""
 
-    def handle_general_navigation(self, query: str, image_data: Optional[str] = None) -> str:
+    def handle_general_navigation(self, query: str, image_data: Optional[str] = None, order_details: Optional[Dict] = None) -> str:
         """General navigation assistance"""
         
         current_location = self._extract_current_location(query) or self.default_current_location
@@ -302,6 +330,81 @@ class NavigationLocationHandler:
         waze_url = f"https://waze.com/ul?q={destination_encoded}&navigate=yes"
         
         return f"[🚗 Open Waze Navigation]({waze_url})"
+    
+    def _get_order_details_from_query(self, query: str) -> Optional[Dict]:
+        """Extract order details from database for better navigation assistance"""
+        import sqlite3
+        import os
+        import json
+        import re
+        
+        try:
+            # Try to extract order ID from query
+            order_id_match = re.search(r'order[\s#]*([A-Z]{1,2}\d{3,4})', query, re.IGNORECASE)
+            order_id = order_id_match.group(1) if order_id_match else None
+            
+            if not order_id:
+                return None
+            
+            # Find database path
+            database_paths = [
+                'grabhack.db',
+                '../grabhack.db', 
+                'GrabHack/grabhack.db',
+                os.path.join(os.path.dirname(__file__), '../../grabhack.db')
+            ]
+            
+            db_path = None
+            for path in database_paths:
+                if os.path.exists(path):
+                    db_path = path
+                    break
+            
+            if not db_path:
+                return None
+            
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            
+            # Get order details
+            cursor.execute('''
+                SELECT 
+                    id, start_location, end_location, restaurant_name, 
+                    customer_id, status, payment_method, details
+                FROM orders 
+                WHERE id = ? AND service = 'grab_food'
+            ''', (order_id,))
+            
+            result = cursor.fetchone()
+            conn.close()
+            
+            if result:
+                order_id, start_loc, end_loc, restaurant, customer_id, status, payment_method, details = result
+                
+                order_details = {
+                    'order_id': order_id,
+                    'start_location': start_loc or 'Restaurant Area',
+                    'end_location': end_loc or 'Customer Location',
+                    'restaurant_name': restaurant or 'Restaurant',
+                    'customer_id': customer_id,
+                    'status': status,
+                    'payment_method': payment_method
+                }
+                
+                # Add details from JSON if available
+                if details:
+                    try:
+                        details_json = json.loads(details)
+                        order_details.update(details_json)
+                    except:
+                        pass
+                
+                return order_details
+            
+        except Exception as e:
+            return None
+        
+        return None
         
     async def handle_navigation_issue(self, context: NavigationContext) -> Dict[str, Any]:
         """Main handler for all navigation and location issues"""
