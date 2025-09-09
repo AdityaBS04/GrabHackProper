@@ -494,7 +494,11 @@ def get_categories(service, user_type):
             ]
         elif service_name == 'grab_cabs' and folder_name == 'driver':
             categories = [
-                {'id': 'performance_handler', 'name': 'Performance Support'}
+                {'id': 'customer_experience', 'name': 'Customer Experience Issues'},
+                {'id': 'driver_vehicle_issues', 'name': 'Driver & Vehicle Issues'},
+                {'id': 'fare_payment', 'name': 'Fare & Payment Issues'},
+                {'id': 'operational_issues', 'name': 'Operational Issues'},
+                {'id': 'operational_problems', 'name': 'Operational Problems'}
             ]
         elif service_name == 'grab_mart' and folder_name == 'customer':
             categories = [
@@ -534,7 +538,44 @@ def get_subissues(service, user_type, category_id):
         # Get the issues mapping for this service and actor
         issues_mapping = ACTOR_ISSUE_MAPPING.get((service_enum, actor_enum), {})
         
-        # Find matching sub-issues for the category (category_id is actually handler name)
+        # Special handling for grab_cabs driver with new handler structure
+        if service == 'grab_cabs' and user_type == 'driver':
+            sub_issues = []
+            
+            if category_id == 'customer_experience':
+                sub_issues = [
+                    {'id': 'handle_passenger_harassment_complaint', 'name': 'Passenger Harassment/Rude Behavior', 'description': 'Report inappropriate passenger behavior'},
+                    {'id': 'handle_false_complaint_rating_reduction', 'name': 'False Complaint & Rating Issues', 'description': 'Address unfair complaints and rating reductions'},
+                    {'id': 'handle_unresolved_passenger_disputes', 'name': 'Unresolved Passenger Disputes', 'description': 'Get help with ongoing passenger conflicts'}
+                ]
+            elif category_id == 'driver_vehicle_issues':
+                sub_issues = [
+                    {'id': 'handle_vehicle_breakdown_during_ride', 'name': 'Vehicle Breakdown During Ride', 'description': 'Emergency vehicle breakdown support'},
+                    {'id': 'handle_passenger_damage_coverage', 'name': 'Passenger Damage Coverage', 'description': 'Report and claim passenger-caused vehicle damage'},
+                    {'id': 'handle_insurance_fuel_maintenance_support', 'name': 'Insurance/Fuel/Maintenance Support', 'description': 'Get support for vehicle maintenance and insurance'}
+                ]
+            elif category_id == 'fare_payment':
+                sub_issues = [
+                    {'id': 'handle_incorrect_fare_calculation', 'name': 'Incorrect Fare Calculation', 'description': 'Report fare calculation errors'},
+                    {'id': 'handle_payout_not_received', 'name': 'Payout Not Received', 'description': 'Issues with payment processing and delays'},
+                    {'id': 'handle_high_commission_rates', 'name': 'High Commission Rates', 'description': 'Concerns about commission structure'}
+                ]
+            elif category_id == 'operational_issues':
+                sub_issues = [
+                    {'id': 'handle_passenger_cancellation_after_arrival', 'name': 'Passenger Cancellation After Arrival', 'description': 'Compensation for cancelled rides after reaching pickup'},
+                    {'id': 'handle_wrong_pickup_drop_details', 'name': 'Wrong Pickup/Drop Details', 'description': 'Issues with incorrect ride details'},
+                    {'id': 'handle_long_waiting_time_compensation', 'name': 'Long Waiting Time Compensation', 'description': 'Get compensation for excessive waiting times'}
+                ]
+            elif category_id == 'operational_problems':
+                sub_issues = [
+                    {'id': 'handle_no_rides_during_peak_hours', 'name': 'No Rides During Peak Hours', 'description': 'Low ride allocation during busy times'},
+                    {'id': 'handle_unfair_ride_allocation', 'name': 'Unfair Ride Allocation', 'description': 'Issues with ride distribution and fairness'},
+                    {'id': 'handle_incorrect_navigation_route', 'name': 'Incorrect Navigation/Route', 'description': 'GPS and navigation route problems'}
+                ]
+            
+            return jsonify({'subissues': sub_issues})
+        
+        # Default handling for other services
         sub_issues = []
         
         for category, sub_issue_list in issues_mapping.items():
@@ -621,13 +662,13 @@ conversation_sessions = {}
 def get_user_orders_context(username, service, user_type, specific_order_id=None):
     """Get user's order history and context for AI processing"""
     try:
-        conn = get_database_connection()
+        conn = sqlite3.connect(DATABASE_PATH)
         cursor = conn.cursor()
         
         # Get recent orders for this user and service
         cursor.execute("""
-            SELECT id, service, status, price, restaurant_name, address, items, 
-                   date, payment_method, details
+            SELECT id, service, status, price, restaurant_name, start_location, end_location, 
+                   food_items, products_ordered, cab_type, date, payment_method, details
             FROM orders 
             WHERE username = ? AND service = ?
             ORDER BY date DESC 
@@ -643,8 +684,8 @@ def get_user_orders_context(username, service, user_type, specific_order_id=None
         if specific_order_id:
             # First, get the specific order
             cursor.execute("""
-                SELECT id, service, status, price, restaurant_name, address, items, 
-                       date, payment_method, details
+                SELECT id, service, status, price, restaurant_name, start_location, end_location,
+                       food_items, products_ordered, cab_type, date, payment_method, details
                 FROM orders 
                 WHERE id = ? AND username = ?
             """, (specific_order_id, username))
@@ -653,7 +694,11 @@ def get_user_orders_context(username, service, user_type, specific_order_id=None
             
             if specific_order:
                 orders_context.append(f"SPECIFIC ORDER COMPLAINT for {username}:")
-                order_id, svc, status, price, restaurant, address, items, date, payment, details = specific_order
+                order_id, svc, status, price, restaurant, start_location, end_location, food_items, products_ordered, cab_type, date, payment, details = specific_order
+                
+                # Get the appropriate items field based on service
+                items = food_items if food_items else (products_ordered if products_ordered else cab_type)
+                address = end_location if end_location else start_location
                 
                 # Parse details safely
                 details_obj = safe_json_loads(details) if details else {}
@@ -688,7 +733,11 @@ def get_user_orders_context(username, service, user_type, specific_order_id=None
         
         if orders:
             for order in orders:
-                order_id, svc, status, price, restaurant, address, items, date, payment, details = order
+                order_id, svc, status, price, restaurant, start_location, end_location, food_items, products_ordered, cab_type, date, payment, details = order
+                
+                # Get the appropriate items field based on service
+                items = food_items if food_items else (products_ordered if products_ordered else cab_type)
+                address = end_location if end_location else start_location
                 
                 # Skip the specific order if it's already highlighted above
                 if specific_order_id and order_id == specific_order_id:
@@ -775,6 +824,26 @@ def chat():
         
         # If we have both category and sub_issue, use conversational AI processing
         if category and sub_issue:
+            # Special handling for grab_cabs driver navigation route issue (direct handler call)
+            if (service == 'grab_cabs' and user_type == 'driver' and 
+                category == 'operational_problems' and sub_issue == 'handle_incorrect_navigation_route'):
+                
+                try:
+                    from grab_cabs.driver.operational_problems import OperationalProblemsHandler
+                    handler = OperationalProblemsHandler()
+                    response_text = handler.handle_incorrect_navigation_route(message)
+                    
+                    session['messages'].append({'role': 'assistant', 'content': response_text})
+                    
+                    return jsonify({
+                        'response': response_text,
+                        'requires_image': False,
+                        'conversation_id': conversation_id
+                    })
+                except Exception as e:
+                    print(f"Handler call failed: {e}")
+                    # Fall through to AI engine processing
+            
             from enhanced_ai_engine_fixed import EnhancedAgenticAIEngine
             ai_engine = EnhancedAgenticAIEngine()
             
@@ -954,7 +1023,20 @@ def generate_ai_solution(complaint_data):
         category_handler = complaint_data['category']
         
         # Import the specific handler module
-        module_path = f"{service}.{user_type_folder}.{category_handler}"
+        # Special handling for grab_cabs driver with new handler structure
+        if service == 'grab_cabs' and user_type == 'driver':
+            # Map category_id to actual file names
+            category_file_mapping = {
+                'customer_experience': 'customer_experience',
+                'driver_vehicle_issues': 'driver_vehicle_issues', 
+                'fare_payment': 'fare_payment',
+                'operational_issues': 'operational_issues',
+                'operational_problems': 'operational_problems'
+            }
+            actual_file = category_file_mapping.get(category_handler, category_handler)
+            module_path = f"{service}.{user_type_folder}.{actual_file}"
+        else:
+            module_path = f"{service}.{user_type_folder}.{category_handler}"
         
         try:
             handler_module = importlib.import_module(module_path)

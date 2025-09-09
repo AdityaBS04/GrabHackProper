@@ -98,30 +98,6 @@ const Login = () => {
             </button>
           </form>
         </div>
-
-        <div className="mobile-demo-info">
-          <h4>Demo Accounts</h4>
-          <div className="mobile-demo-item">
-            <span>Customer</span>
-            <strong>customer1 / pass123</strong>
-          </div>
-          <div className="mobile-demo-item">
-            <span>Delivery Agent</span>
-            <strong>agent1 / pass123</strong>
-          </div>
-          <div className="mobile-demo-item">
-            <span>Restaurant</span>
-            <strong>resto1 / pass123</strong>
-          </div>
-          <div className="mobile-demo-item">
-            <span>Driver</span>
-            <strong>driver1 / pass123</strong>
-          </div>
-          <div className="mobile-demo-item">
-            <span>Dark Store</span>
-            <strong>store1 / pass123</strong>
-          </div>
-        </div>
       </div>
     </div>
   );

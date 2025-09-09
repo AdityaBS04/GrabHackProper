@@ -279,7 +279,28 @@ const ChatBot = () => {
             {messages.map((message) => (
               <div key={message.id} className={`mobile-message ${message.sender}`}>
                 <div className={`mobile-message-bubble ${message.sender}`}>
-                  <div>{message.text}</div>
+                  <div>
+                    {message.text.split(/(https?:\/\/[^\s]+)/g).map((part, index) => {
+                      if (part.match(/https?:\/\/[^\s]+/)) {
+                        return (
+                          <a 
+                            key={index} 
+                            href={part} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            style={{ 
+                              color: '#007bff', 
+                              textDecoration: 'underline',
+                              fontWeight: 'bold'
+                            }}
+                          >
+                            {part}
+                          </a>
+                        );
+                      }
+                      return part;
+                    })}
+                  </div>
                   
                   {/* Category selection buttons */}
                   {message.showCategories && message.sender === 'bot' && (
