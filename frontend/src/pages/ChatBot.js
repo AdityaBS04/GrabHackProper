@@ -6,7 +6,7 @@ import '../Mobile.css';
 const ChatBot = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { service, userType } = location.state || {};
+  const { service, userType, orderId } = location.state || {};
   
   // Get username from localStorage
   const user = JSON.parse(localStorage.getItem('user') || '{}');
@@ -159,7 +159,8 @@ const ChatBot = () => {
         conversation_id: conversationId,
         category: selectedCategory,
         sub_issue: selectedSubIssue,
-        messages: messages
+        messages: messages,
+        order_id: orderId
       });
 
       const botMessage = {
@@ -243,7 +244,8 @@ const ChatBot = () => {
     const serviceMap = {
       'grab_food': '🍕',
       'grab_cabs': '🚗', 
-      'grab_mart': '🛒'
+      'grab_mart': '🛒',
+      'grab_express': '📦'
     };
     return serviceMap[service] || '🤖';
   };

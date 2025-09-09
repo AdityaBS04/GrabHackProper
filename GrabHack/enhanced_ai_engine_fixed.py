@@ -259,7 +259,7 @@ class EnhancedAgenticAIEngine:
         
         return function_name in food_quality_issues
     
-    def _check_order_status_for_food_quality(self, username: str, service: str, function_name: str, user_query: str = "") -> Optional[str]:
+    def _check_order_status_for_food_quality(self, username: str, service: str, function_name: str, user_query: str = "", specific_order_id: str = None) -> Optional[str]:
         """Check order status before accepting quality complaints for all services"""
         import sqlite3
         import os
@@ -295,8 +295,13 @@ class EnhancedAgenticAIEngine:
             conn = sqlite3.connect(DATABASE_PATH)
             cursor = conn.cursor()
             
-            # First, try to extract a specific order ID from the user query
-            specific_order_id = self._extract_order_id_from_query(user_query)
+            # First, check if a specific order ID was passed from the session context
+            if not specific_order_id:
+                # If no specific order ID provided, try to extract from the user query
+                specific_order_id = self._extract_order_id_from_query(user_query)
+                print(f"DEBUG: Extracted order ID from query: {specific_order_id}")
+            else:
+                print(f"DEBUG: Using specific order ID from session: {specific_order_id}")
             
             if specific_order_id:
                 # Check the specific order mentioned by the user
@@ -660,13 +665,14 @@ Thank you for your patience as we ensure you receive the best possible resolutio
             conversation_context = session_context.get('conversation_context', '')
             username = session_context.get('username', 'anonymous')
             user_orders = session_context.get('user_orders', '')
+            specific_order_id = session_context.get('specific_order_id')
             
-            print(f"DEBUG: process_conversation called with selected_issue={selected_issue}, username={username}")
+            print(f"DEBUG: process_conversation called with selected_issue={selected_issue}, username={username}, specific_order_id={specific_order_id}")
             
             # Check for order status validation if this is a food quality issue
             if selected_issue and self._is_food_quality_issue(selected_issue, service) and user_type == 'customer':
                 print(f"DEBUG: Checking order status for food quality issue in conversation...")
-                order_status_response = self._check_order_status_for_food_quality(username, service, selected_issue, message)
+                order_status_response = self._check_order_status_for_food_quality(username, service, selected_issue, message, specific_order_id)
                 if order_status_response:
                     print(f"DEBUG: Order status blocked conversation request")
                     return {

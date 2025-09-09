@@ -35,8 +35,8 @@ const Dashboard = () => {
     navigate('/login');
   };
 
-  const handleComplaint = (service) => {
-    navigate('/complaint', { state: { service, userType: user.type } });
+  const handleComplaint = (service, orderId = null) => {
+    navigate('/complaint', { state: { service, userType: user.type, orderId } });
   };
 
   if (!user) return <div>Loading...</div>;
@@ -56,7 +56,8 @@ const Dashboard = () => {
     const serviceMap = {
       'grab_food': '🍕',
       'grab_cabs': '🚗',
-      'grab_mart': '🛒'
+      'grab_mart': '🛒',
+      'grab_express': '📦'
     };
     return serviceMap[service] || '📱';
   };
@@ -124,9 +125,44 @@ const Dashboard = () => {
                     </div>
                   )}
                   
+                  {/* Display food items for grab_food orders */}
+                  {order.service === 'grab_food' && order.food_items && (
+                    <div style={{ fontSize: '14px', color: '#495057', marginBottom: '12px', padding: '8px', backgroundColor: '#f8f9fa', borderRadius: '4px' }}>
+                      <strong>🍽️ Items ordered:</strong>
+                      <div style={{ marginTop: '4px', fontStyle: 'italic' }}>
+                        {order.food_items}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Display products for grab_mart orders */}
+                  {order.service === 'grab_mart' && order.products_ordered && (
+                    <div style={{ fontSize: '14px', color: '#495057', marginBottom: '12px', padding: '8px', backgroundColor: '#f8f9fa', borderRadius: '4px' }}>
+                      <strong>🛒 Products ordered:</strong>
+                      <div style={{ marginTop: '4px', fontStyle: 'italic' }}>
+                        {order.products_ordered}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Display packages for grab_express orders */}
+                  {order.service === 'grab_express' && order.products_ordered && (
+                    <div style={{ fontSize: '14px', color: '#495057', marginBottom: '12px', padding: '8px', backgroundColor: '#f8f9fa', borderRadius: '4px' }}>
+                      <strong>📦 Package details:</strong>
+                      <div style={{ marginTop: '4px', fontStyle: 'italic' }}>
+                        {order.products_ordered}
+                      </div>
+                      {order.details && order.details.vehicle_type && (
+                        <div style={{ marginTop: '4px', fontSize: '12px', color: '#6c757d' }}>
+                          🚚 Vehicle: {order.details.vehicle_type}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  
                   <button 
                     className="mobile-btn mobile-btn-secondary mobile-btn-small"
-                    onClick={() => handleComplaint(order.service)}
+                    onClick={() => handleComplaint(order.service, order.id)}
                   >
                     🆘 Report Issue
                   </button>

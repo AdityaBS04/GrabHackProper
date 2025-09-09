@@ -181,6 +181,23 @@ def init_database():
          'Mediterranean Grill', '654 Cedar Lane House 5', 'CUST005', 'REST010', 'DRV008',
          'Mediterranean Grill', 'Chicken Shawarma, Hummus, Pita Bread, Lemonade', None, None,
          'upi', '2024-09-04', '{"restaurant": "Mediterranean Grill", "total": 27.30, "rating": 4}'),
+         
+        # === GRAB EXPRESS CUSTOMER ORDERS ===
+        # High credibility customer (customer1) - express delivery orders
+        ('GE001', 'grab_express', 'customer', 'customer1', 'completed', 12.50,
+         'Electronics Store Downtown', '123 Oak Street Apartment 4B', 'CUST001', None, 'EXP001',
+         None, None, None, 'Smartphone Case, Screen Protector, Charging Cable',
+         'online', '2024-09-01', '{"pickup_location": "Electronics Store Downtown", "delivery_time_minutes": 45, "vehicle_type": "Bike", "package_size": "Small", "rating": 5}'),
+         
+        ('GE002', 'grab_express', 'customer', 'customer1', 'completed', 25.80,
+         'Office Supply Center', '123 Oak Street Apartment 4B', 'CUST001', None, 'EXP002', 
+         None, None, None, 'Laptop Stand, Wireless Mouse, Notebook Set',
+         'card', '2024-09-03', '{"pickup_location": "Office Supply Center", "delivery_time_minutes": 60, "vehicle_type": "Car", "package_size": "Medium", "rating": 4}'),
+         
+        ('GE003', 'grab_express', 'customer', 'customer1', 'in_progress', 35.00,
+         'Furniture Warehouse', '123 Oak Street Apartment 4B', 'CUST001', None, 'EXP003',
+         None, None, None, 'Office Chair (Disassembled), Desk Lamp',
+         'cod', '2024-09-06', '{"pickup_location": "Furniture Warehouse", "estimated_delivery_minutes": 90, "vehicle_type": "Truck", "package_size": "Large", "special_instructions": "Fragile - Handle with care"}'),
         
         # === GRAB FOOD DELIVERY AGENT ORDERS ===
         ('GF011', 'grab_food', 'delivery_agent', 'agent1', 'assigned', 0.00,
@@ -258,7 +275,23 @@ def init_database():
         ('GM004', 'grab_mart', 'darkstore', 'store2', 'completed', 91.45,
          'Dark Store Warehouse B', 'Premium Residential Area', 'CUST009', 'STORE002', 'DRV203',
          None, None, None, 'Organic Vegetables, Premium Meats, Imported Cheese, Wine',
-         'card', '2024-09-04', '{"completed_order": "GM001", "items": 20, "quality_check": "passed", "delivery_rating": 4}')
+         'card', '2024-09-04', '{"completed_order": "GM001", "items": 20, "quality_check": "passed", "delivery_rating": 4}'),
+         
+        # More grab_express orders for variety
+        ('GE004', 'grab_express', 'customer', 'john_doe', 'completed', 18.90,
+         'Medical Pharmacy', '321 Maple Drive Apartment 8A', 'CUST004', None, 'EXP004',
+         None, None, None, 'Prescription Medicines, Medical Supplies',
+         'online', '2024-09-02', '{"pickup_location": "Medical Pharmacy", "delivery_time_minutes": 30, "vehicle_type": "Bike", "package_size": "Small", "urgent_delivery": true, "rating": 5}'),
+         
+        ('GE005', 'grab_express', 'customer', 'jane_smith', 'completed', 42.60,
+         'Home Appliance Store', '654 Cedar Lane House 5', 'CUST005', None, 'EXP005',
+         None, None, None, 'Microwave Oven (Small), Kitchen Utensils Set',
+         'upi', '2024-08-28', '{"pickup_location": "Home Appliance Store", "delivery_time_minutes": 75, "vehicle_type": "Car", "package_size": "Medium", "rating": 4}'),
+         
+        ('GE006', 'grab_express', 'customer', 'customer2', 'cancelled', 55.00,
+         'Industrial Supply Co', '456 Pine Road House 12', 'CUST002', None, None,
+         None, None, None, 'Heavy Machinery Parts, Tools Set',
+         'cod', '2024-09-05', '{"pickup_location": "Industrial Supply Co", "cancelled_reason": "vehicle_capacity_insufficient", "required_vehicle": "Truck", "assigned_vehicle": "Car"}')
     ]
     
     cursor.executemany('''
@@ -294,6 +327,13 @@ def init_database():
         # Test user complaints
         ('grab_food', 'customer', 'test_user', 'COUPON_QUERY', 'Discount coupon was not applied', 'Coupons/offers not applied correctly',
          'Coupon has been manually applied and refund processed.', 'resolved', '2024-09-05 16:30:00'),
+         
+        # Grab Express customer complaints
+        ('grab_express', 'customer', 'customer1', 'PACKAGE_SIZE_VEHICLE_MISMATCH', 'My large package was assigned to a bike instead of truck', 'Package too large for bike delivery',
+         'We apologize for the vehicle mismatch. Your package has been reassigned to a truck delivery partner and will arrive within 2 hours.', 'resolved', '2024-09-02 14:20:00'),
+         
+        ('grab_express', 'customer', 'customer2', 'VEHICLE_TYPE_REQUIREMENTS', 'Fragile electronics damaged during bike delivery', 'Fragile items need car instead of bike',
+         'We sincerely apologize for the damage. A full refund has been processed and we have updated our system to ensure fragile items are assigned car delivery.', 'resolved', '2024-09-04 10:15:00'),
          
         # Delivery agent complaints
         ('grab_food', 'delivery_agent', 'agent2', 'GPS_APP_TECHNICAL_ISSUES', 'GPS not working, having trouble finding address', 'GPS and app technical support',
@@ -343,11 +383,12 @@ def login():
         
         # Define service mappings
         service_mappings = {
-            'customer': ['grab_food', 'grab_cabs', 'grab_mart'],
+            'customer': ['grab_food', 'grab_cabs', 'grab_mart', 'grab_express'],
             'delivery_agent': ['grab_food', 'grab_mart'],
             'restaurant': ['grab_food'],
             'driver': ['grab_cabs'],
-            'darkstore': ['grab_mart']
+            'darkstore': ['grab_mart'],
+            'express_delivery_partner': ['grab_express']
         }
         
         return jsonify({
@@ -467,6 +508,17 @@ def get_categories(service, user_type):
             categories = [
                 {'id': 'inventory_handler', 'name': 'Inventory Management'}
             ]
+        elif service_name == 'grab_express' and folder_name == 'customer':
+            categories = [
+                {'id': 'order_quality_handler', 'name': 'Package Quality & Accuracy'},
+                {'id': 'delivery_experience_handler', 'name': 'Express Delivery Experience'},
+                {'id': 'driver_interaction_handler', 'name': 'Delivery Partner Interaction'},
+                {'id': 'payment_refund_handler', 'name': 'Payment & Refunds'},
+                {'id': 'technical_handler', 'name': 'Technical Issues'},
+                {'id': 'vehicle_matching_handler', 'name': 'Vehicle Type & Capacity'},
+                {'id': 'express_service_handler', 'name': 'Express Service Features'},
+                {'id': 'special_handling_handler', 'name': 'Special Package Handling'}
+            ]
         
         return jsonify({'categories': categories})
     except Exception as e:
@@ -566,7 +618,7 @@ def submit_complaint():
 # Store conversation sessions in memory (in production, use a proper database)
 conversation_sessions = {}
 
-def get_user_orders_context(username, service, user_type):
+def get_user_orders_context(username, service, user_type, specific_order_id=None):
     """Get user's order history and context for AI processing"""
     try:
         conn = get_database_connection()
@@ -586,10 +638,61 @@ def get_user_orders_context(username, service, user_type):
         
         # Build context string
         orders_context = []
-        if orders:
+        
+        # If specific order ID is provided, prioritize that order
+        if specific_order_id:
+            # First, get the specific order
+            cursor.execute("""
+                SELECT id, service, status, price, restaurant_name, address, items, 
+                       date, payment_method, details
+                FROM orders 
+                WHERE id = ? AND username = ?
+            """, (specific_order_id, username))
+            
+            specific_order = cursor.fetchone()
+            
+            if specific_order:
+                orders_context.append(f"SPECIFIC ORDER COMPLAINT for {username}:")
+                order_id, svc, status, price, restaurant, address, items, date, payment, details = specific_order
+                
+                # Parse details safely
+                details_obj = safe_json_loads(details) if details else {}
+                
+                order_info = f"- COMPLAINT ORDER {order_id}: {status.upper()}"
+                if restaurant:
+                    order_info += f" from {restaurant}"
+                if price:
+                    order_info += f" (${price:.2f})"
+                if items:
+                    order_info += f" - Items: {items}"
+                if date:
+                    order_info += f" on {date}"
+                if address:
+                    order_info += f" - Delivered to: {address}"
+                
+                # Add relevant details
+                if details_obj.get('rating'):
+                    order_info += f" (Rating: {details_obj['rating']}/5)"
+                if details_obj.get('complaint'):
+                    order_info += f" [Previous complaint: {details_obj['complaint']}]"
+                if details_obj.get('cancelled_reason'):
+                    order_info += f" [Cancelled: {details_obj['cancelled_reason']}]"
+                    
+                orders_context.append(order_info)
+                orders_context.append(f"\nOTHER RECENT ORDERS for context:")
+            else:
+                orders_context.append(f"ERROR: Order {specific_order_id} not found for {username}")
+                orders_context.append(f"CUSTOMER ORDER HISTORY for {username}:")
+        else:
             orders_context.append(f"CUSTOMER ORDER HISTORY for {username}:")
+        
+        if orders:
             for order in orders:
                 order_id, svc, status, price, restaurant, address, items, date, payment, details = order
+                
+                # Skip the specific order if it's already highlighted above
+                if specific_order_id and order_id == specific_order_id:
+                    continue
                 
                 # Parse details safely
                 details_obj = safe_json_loads(details) if details else {}
@@ -641,6 +744,7 @@ def chat():
     category = data.get('category')
     sub_issue = data.get('sub_issue')
     username = data.get('username', 'anonymous')
+    order_id = data.get('order_id')
     previous_messages = data.get('messages', [])
     
     if not message or not service or not user_type:
@@ -667,7 +771,7 @@ def chat():
         print(f"DEBUG: Chat request - username={username}, category={category}, sub_issue={sub_issue}")
         
         # Fetch user's order data from database to provide context
-        user_orders_context = get_user_orders_context(username, service, user_type)
+        user_orders_context = get_user_orders_context(username, service, user_type, order_id)
         
         # If we have both category and sub_issue, use conversational AI processing
         if category and sub_issue:
@@ -691,7 +795,8 @@ def chat():
                     'sub_issue': sub_issue,
                     'conversation_context': conversation_context,
                     'username': username,
-                    'user_orders': user_orders_context
+                    'user_orders': user_orders_context,
+                    'specific_order_id': order_id
                 }
             )
             
