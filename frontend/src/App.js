@@ -4,6 +4,8 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import ChatBot from './pages/ChatBot';
 import './App.css';
+import './EnhancedAnimations.css';
+import './FinalEnhancements.css';
 
 function App() {
   return (

@@ -2,6 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import '../Mobile.css';
+import '../EnhancedAnimations.css';
+import AnimatedBackground from '../components/AnimatedBackground';
+import LoadingSpinner from '../components/LoadingSpinner';
+import TypingIndicator from '../components/TypingIndicator';
 
 const ChatBot = () => {
   const location = useLocation();
@@ -263,13 +267,14 @@ const ChatBot = () => {
 
   return (
     <div className="App">
+      <AnimatedBackground />
       <div className="mobile-container">
         <div className="mobile-header">
           <button className="mobile-header-icon-btn" onClick={handleBack}>
             ←
           </button>
           <div className="mobile-header-content">
-            <h1>{getServiceEmoji(service)} AI Support Chat</h1>
+            <h1 className="animated-title">{getServiceEmoji(service)} AI Support Chat</h1>
             <p>{service?.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())} • {getUserTypeEmoji(userType)} {userType?.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</p>
           </div>
         </div>
@@ -358,14 +363,7 @@ const ChatBot = () => {
             ))}
             
             {loading && (
-              <div className="mobile-message bot">
-                <div className="mobile-message-bubble bot">
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <div>🤖 Thinking</div>
-                    <div className="mobile-spinner" style={{ width: '16px', height: '16px' }}></div>
-                  </div>
-                </div>
-              </div>
+              <TypingIndicator />
             )}
             <div ref={messagesEndRef} />
           </div>

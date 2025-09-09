@@ -2,6 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import '../Mobile.css';
+import '../EnhancedAnimations.css';
+import AnimatedBackground from '../components/AnimatedBackground';
+import LoadingSpinner from '../components/LoadingSpinner';
+import FloatingActionButton from '../components/FloatingActionButton';
+import AnimatedCard from '../components/AnimatedCard';
+import InteractiveIcon from '../components/InteractiveIcon';
+import PulsingOrb from '../components/PulsingOrb';
 
 const Dashboard = () => {
   const [user, setUser] = useState(null);
@@ -39,7 +46,12 @@ const Dashboard = () => {
     navigate('/complaint', { state: { service, userType: user.type, orderId } });
   };
 
-  if (!user) return <div>Loading...</div>;
+  if (!user) return (
+    <div className="App">
+      <AnimatedBackground />
+      <LoadingSpinner text="Loading Dashboard..." />
+    </div>
+  );
 
   const getUserTypeDisplay = (type) => {
     const typeMap = {
@@ -76,22 +88,26 @@ const Dashboard = () => {
 
   return (
     <div className="App">
+      <AnimatedBackground />
       <div className="mobile-container">
         <div className="mobile-header">
           <button className="mobile-header-icon-btn" onClick={handleLogout}>
             ←
           </button>
           <div className="mobile-header-content">
-            <h1>Hello, {user.username}!</h1>
+            <h1 className="gradient-text">Hello, {user.username}!</h1>
             <p>{getUserTypeDisplay(user.type)}</p>
           </div>
         </div>
 
-        <div className="mobile-card">
-          <h2>📋 Your Orders & Activities</h2>
+        <AnimatedCard>
+          <h2>
+            <InteractiveIcon icon="📋" size={24} />
+            Your Orders & Activities
+          </h2>
           {orders.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '40px 20px', color: '#6c757d' }}>
-              <div style={{ fontSize: '48px', marginBottom: '16px' }}>📦</div>
+              <PulsingOrb size={80} color="#00C851" style={{ margin: '0 auto 16px' }} />
               <p>No orders found</p>
               <p style={{ fontSize: '14px', opacity: 0.8 }}>Your order history will appear here</p>
             </div>
@@ -170,10 +186,13 @@ const Dashboard = () => {
               ))}
             </div>
           )}
-        </div>
+        </AnimatedCard>
 
-        <div className="mobile-card">
-          <h2>🆘 Report Issues</h2>
+        <AnimatedCard>
+          <h2>
+            <InteractiveIcon icon="🆘" size={24} hoverColor="#dc3545" />
+            Report Issues
+          </h2>
           <div className="mobile-service-grid">
             {user.services.map(service => (
               <div key={service} className="mobile-service-card" onClick={() => handleComplaint(service)}>
@@ -182,7 +201,12 @@ const Dashboard = () => {
               </div>
             ))}
           </div>
-        </div>
+        </AnimatedCard>
+        
+        <FloatingActionButton 
+          onClick={() => navigate('/complaint')}
+          icon="🆘"
+        />
       </div>
     </div>
   );

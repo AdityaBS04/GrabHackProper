@@ -1,0 +1,534 @@
+/* Enhanced Animations & Visual Effects for GrabHack Frontend */
+
+/* Advanced Background Animation */
+body {
+  position: relative;
+  overflow-x: hidden;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: 
+    radial-gradient(circle at 20% 50%, rgba(0, 200, 81, 0.05) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(0, 123, 255, 0.05) 0%, transparent 50%),
+    radial-gradient(circle at 40% 80%, rgba(255, 193, 7, 0.05) 0%, transparent 50%);
+  animation: backgroundFlow 20s ease-in-out infinite alternate;
+  z-index: -2;
+}
+
+@keyframes backgroundFlow {
+  0% { 
+    transform: translateX(-10px) translateY(-10px) scale(1);
+    opacity: 0.3;
+  }
+  100% { 
+    transform: translateX(10px) translateY(10px) scale(1.05);
+    opacity: 0.6;
+  }
+}
+
+/* Floating Particles */
+.floating-particles {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: -1;
+  overflow: hidden;
+}
+
+.particle {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  background: linear-gradient(45deg, #00C851, #007bff);
+  border-radius: 50%;
+  opacity: 0.6;
+  animation: floatUp 8s linear infinite;
+}
+
+@keyframes floatUp {
+  0% {
+    transform: translateY(100vh) rotate(0deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.8;
+  }
+  90% {
+    opacity: 0.8;
+  }
+  100% {
+    transform: translateY(-100px) rotate(360deg);
+    opacity: 0;
+  }
+}
+
+/* Staggered particle animations */
+.particle:nth-child(1) { left: 10%; animation-delay: -0s; animation-duration: 6s; }
+.particle:nth-child(2) { left: 20%; animation-delay: -1s; animation-duration: 8s; }
+.particle:nth-child(3) { left: 30%; animation-delay: -2s; animation-duration: 7s; }
+.particle:nth-child(4) { left: 40%; animation-delay: -3s; animation-duration: 9s; }
+.particle:nth-child(5) { left: 50%; animation-delay: -4s; animation-duration: 6s; }
+.particle:nth-child(6) { left: 60%; animation-delay: -5s; animation-duration: 8s; }
+.particle:nth-child(7) { left: 70%; animation-delay: -6s; animation-duration: 7s; }
+.particle:nth-child(8) { left: 80%; animation-delay: -7s; animation-duration: 9s; }
+.particle:nth-child(9) { left: 90%; animation-delay: -8s; animation-duration: 6s; }
+
+/* Enhanced Mobile Header with Animated Background */
+.mobile-header {
+  position: relative;
+  overflow: hidden;
+}
+
+.mobile-header::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(
+    45deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.1) 50%,
+    transparent 70%
+  );
+  animation: shimmer 3s linear infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%) translateY(-100%) rotate(45deg);
+  }
+  100% {
+    transform: translateX(100%) translateY(100%) rotate(45deg);
+  }
+}
+
+/* Animated App Title */
+.animated-title {
+  display: inline-block;
+  background: linear-gradient(
+    90deg,
+    #ffffff 0%,
+    #f0f8ff 25%,
+    #ffffff 50%,
+    #f0f8ff 75%,
+    #ffffff 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: textShine 3s ease-in-out infinite;
+}
+
+@keyframes textShine {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* Enhanced Button Animations */
+.mobile-btn {
+  position: relative;
+  overflow: hidden;
+  transform: perspective(1px) translateZ(0);
+}
+
+.mobile-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.3),
+    transparent
+  );
+  transition: left 0.5s;
+}
+
+.mobile-btn:hover::before {
+  left: 100%;
+}
+
+/* Pulse effect for primary buttons */
+.mobile-btn-primary {
+  animation: gentlePulse 2s ease-in-out infinite;
+}
+
+@keyframes gentlePulse {
+  0%, 100% {
+    box-shadow: 0 4px 20px rgba(0, 200, 81, 0.3);
+  }
+  50% {
+    box-shadow: 0 6px 30px rgba(0, 200, 81, 0.5);
+  }
+}
+
+/* Enhanced Card Hover Effects */
+.mobile-card {
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  position: relative;
+}
+
+.mobile-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    135deg,
+    rgba(0, 200, 81, 0.05) 0%,
+    rgba(0, 123, 255, 0.05) 100%
+  );
+  opacity: 0;
+  border-radius: 20px;
+  transition: opacity 0.3s ease;
+}
+
+.mobile-card:hover::before {
+  opacity: 1;
+}
+
+.mobile-card:hover {
+  transform: translateY(-8px) scale(1.02);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+}
+
+/* Service Card Enhanced Animations */
+.mobile-service-card {
+  position: relative;
+  transform-style: preserve-3d;
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.mobile-service-card::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    135deg,
+    transparent 0%,
+    rgba(0, 200, 81, 0.1) 50%,
+    transparent 100%
+  );
+  opacity: 0;
+  border-radius: 16px;
+  transition: opacity 0.3s ease;
+}
+
+.mobile-service-card:hover::after {
+  opacity: 1;
+}
+
+.mobile-service-card:hover {
+  transform: translateY(-12px) rotateX(5deg) rotateY(5deg);
+  box-shadow: 
+    0 20px 40px rgba(0, 200, 81, 0.2),
+    0 0 0 1px rgba(0, 200, 81, 0.1);
+}
+
+.mobile-service-card h3 {
+  transition: all 0.3s ease;
+}
+
+.mobile-service-card:hover h3 {
+  color: #00C851;
+  transform: scale(1.05);
+}
+
+/* Enhanced Loading Animation */
+.fancy-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  padding: 40px;
+  gap: 20px;
+}
+
+.loading-spinner {
+  width: 60px;
+  height: 60px;
+  position: relative;
+}
+
+.loading-ring {
+  width: 100%;
+  height: 100%;
+  border: 4px solid transparent;
+  border-radius: 50%;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.loading-ring:nth-child(1) {
+  border-top: 4px solid #00C851;
+  animation: spin 1s linear infinite;
+}
+
+.loading-ring:nth-child(2) {
+  border-right: 4px solid #007bff;
+  animation: spin 1.5s linear infinite reverse;
+}
+
+.loading-ring:nth-child(3) {
+  border-bottom: 4px solid #ffc107;
+  animation: spin 2s linear infinite;
+}
+
+/* Loading Text Animation */
+.loading-text {
+  font-size: 16px;
+  color: #6c757d;
+  animation: loadingFade 1.5s ease-in-out infinite;
+}
+
+@keyframes loadingFade {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}
+
+/* Chat Message Enhanced Animations */
+.mobile-message {
+  animation: messageSlideIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.mobile-message.user {
+  animation: messageSlideInRight 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes messageSlideIn {
+  0% {
+    opacity: 0;
+    transform: translateX(-30px) translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) translateY(0);
+  }
+}
+
+@keyframes messageSlideInRight {
+  0% {
+    opacity: 0;
+    transform: translateX(30px) translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) translateY(0);
+  }
+}
+
+/* Typing Indicator Animation */
+.typing-indicator {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 16px;
+  background: white;
+  border-radius: 20px;
+  border-bottom-left-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  margin-bottom: 12px;
+}
+
+.typing-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #00C851;
+  animation: typingBounce 1.4s ease-in-out infinite;
+}
+
+.typing-dot:nth-child(1) { animation-delay: -0.32s; }
+.typing-dot:nth-child(2) { animation-delay: -0.16s; }
+.typing-dot:nth-child(3) { animation-delay: 0s; }
+
+@keyframes typingBounce {
+  0%, 80%, 100% {
+    transform: scale(0.8);
+    opacity: 0.5;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Enhanced Form Input Focus Effect */
+.mobile-form-input {
+  position: relative;
+}
+
+.mobile-form-input:focus {
+  box-shadow: 
+    0 0 0 4px rgba(0, 200, 81, 0.1),
+    0 8px 25px rgba(0, 200, 81, 0.15);
+  animation: inputGlow 0.3s ease-out;
+}
+
+@keyframes inputGlow {
+  0% {
+    box-shadow: 0 0 0 0 rgba(0, 200, 81, 0.4);
+  }
+  100% {
+    box-shadow: 0 0 0 4px rgba(0, 200, 81, 0.1);
+  }
+}
+
+/* Success/Error Message Animations */
+.mobile-success-message,
+.mobile-error-message {
+  animation: messagePopIn 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  position: relative;
+  overflow: hidden;
+}
+
+.mobile-success-message::before,
+.mobile-error-message::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.3),
+    transparent
+  );
+  animation: messageShine 2s ease-in-out;
+}
+
+@keyframes messagePopIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.8) translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes messageShine {
+  0% { left: -100%; }
+  100% { left: 100%; }
+}
+
+/* Interactive Button Press Effect */
+.mobile-btn:active {
+  transform: scale(0.95);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  transition: all 0.1s ease-out;
+}
+
+/* Gradient Text Animation */
+.gradient-text {
+  background: linear-gradient(
+    45deg,
+    #00C851 0%,
+    #007bff 25%,
+    #ffc107 50%,
+    #dc3545 75%,
+    #00C851 100%
+  );
+  background-size: 300% 300%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: gradientShift 4s ease-in-out infinite;
+}
+
+@keyframes gradientShift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+/* Floating Action Button */
+.floating-action-btn {
+  position: fixed;
+  bottom: 30px;
+  right: 30px;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #00C851, #00A043);
+  border: none;
+  color: white;
+  font-size: 24px;
+  cursor: pointer;
+  box-shadow: 0 8px 25px rgba(0, 200, 81, 0.4);
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  z-index: 1000;
+  animation: floatingBob 3s ease-in-out infinite;
+}
+
+@keyframes floatingBob {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+.floating-action-btn:hover {
+  transform: scale(1.1) translateY(-5px);
+  box-shadow: 0 15px 35px rgba(0, 200, 81, 0.6);
+}
+
+/* Responsive Parallax Effect */
+@media (min-width: 768px) {
+  .parallax-container {
+    transform-style: preserve-3d;
+    perspective: 1000px;
+  }
+  
+  .parallax-element {
+    transform: translateZ(50px) scale(0.95);
+    transition: transform 0.1s ease-out;
+  }
+}
+
+/* Dark mode transitions */
+@media (prefers-color-scheme: dark) {
+  .particle {
+    background: linear-gradient(45deg, #00ff88, #0099ff);
+  }
+  
+  .mobile-card::before {
+    background: linear-gradient(
+      135deg,
+      rgba(0, 255, 136, 0.05) 0%,
+      rgba(0, 153, 255, 0.05) 100%
+    );
+  }
+}
+
+/* Accessibility: Reduce motion for users who prefer it */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
