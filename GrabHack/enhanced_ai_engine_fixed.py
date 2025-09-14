@@ -122,19 +122,27 @@ class EnhancedAgenticAIEngine:
         # For now, use the fallback method which works reliably
         return self._generate_enhanced_navigation_response(user_query)
     
-    def _generate_enhanced_navigation_response(self, user_query: str) -> str:
-        """Generate enhanced navigation response with intelligent routing"""
-        
-        # Extract locations from query or use defaults
-        current_location = self._extract_location_from_query(user_query, "current") or "Sapna Book Stores, Jayanagar, Bangalore"
-        destination = self._extract_location_from_query(user_query, "destination") or "South End Circle Metro, Bangalore"
-        
-        # Generate navigation links
-        import urllib.parse
-        current_encoded = urllib.parse.quote(current_location)
-        dest_encoded = urllib.parse.quote(destination)
-        maps_url = f"https://www.google.com/maps/dir/{current_encoded}/{dest_encoded}/"
-        waze_url = f"https://waze.com/ul?q={dest_encoded}&navigate=yes"
+    def _generate_enhanced_navigation_response(self, user_query: str, start_lat: float = None, start_lng: float = None, end_lat: float = None, end_lng: float = None) -> str:
+        """Generate enhanced navigation response with intelligent routing using coordinates when available"""
+
+        # Use coordinates if provided, otherwise extract from query or use defaults
+        if start_lat and start_lng and end_lat and end_lng:
+            # Generate coordinate-based navigation links for maximum accuracy
+            maps_url = f"https://www.google.com/maps/dir/{start_lat},{start_lng}/{end_lat},{end_lng}/"
+            waze_url = f"https://waze.com/ul?ll={end_lat},{end_lng}&navigate=yes"
+            current_location = f"Location ({start_lat:.4f}, {start_lng:.4f})"
+            destination = f"Destination ({end_lat:.4f}, {end_lng:.4f})"
+        else:
+            # Fallback to address-based navigation
+            current_location = self._extract_location_from_query(user_query, "current") or "Sapna Book Stores, Jayanagar, Bangalore"
+            destination = self._extract_location_from_query(user_query, "destination") or "South End Circle Metro, Bangalore"
+
+            # Generate navigation links
+            import urllib.parse
+            current_encoded = urllib.parse.quote(current_location)
+            dest_encoded = urllib.parse.quote(destination)
+            maps_url = f"https://www.google.com/maps/dir/{current_encoded}/{dest_encoded}/"
+            waze_url = f"https://waze.com/ul?q={dest_encoded}&navigate=yes"
         
         # Determine response type based on query
         query_lower = user_query.lower()
@@ -370,8 +378,9 @@ Is there anything else I can help you with regarding your current order?
             return None
         
     
-    def process_complaint(self, function_name: str, user_query: str, service: str, 
-                         user_type: str, image_data: Optional[str] = None, username: Optional[str] = None) -> str:
+    def process_complaint(self, function_name: str, user_query: str, service: str,
+                         user_type: str, image_data: Optional[str] = None, username: Optional[str] = None,
+                         order_id: Optional[str] = None) -> str:
         """Main method to process complaint using appropriate AI model"""
         
         try:

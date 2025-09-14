@@ -6,6 +6,7 @@ import os
 from datetime import datetime
 from dotenv import load_dotenv
 from models import GrabService, Actor, ACTOR_ISSUE_MAPPING, SERVICE_ACTORS, IssueCategory
+from cross_actor_service import CrossActorUpdateService
 import importlib
 
 # Load environment variables from parent directory
@@ -15,6 +16,9 @@ app = Flask(__name__)
 CORS(app)
 
 DATABASE_PATH = 'grabhack.db'
+
+# Initialize cross-actor update service
+cross_actor_service = CrossActorUpdateService(DATABASE_PATH)
 
 def safe_json_loads(json_string):
     """Safely parse JSON string, return empty dict if parsing fails"""
@@ -46,7 +50,7 @@ def init_database():
     # Drop existing table and recreate with all required fields
     cursor.execute('DROP TABLE IF EXISTS orders')
     
-    # Create orders table with all required fields
+    # Create orders table with coordinate-based location fields and update tracking
     cursor.execute('''
         CREATE TABLE orders (
             id TEXT PRIMARY KEY,
@@ -55,8 +59,12 @@ def init_database():
             username TEXT NOT NULL,
             status TEXT NOT NULL,
             price REAL,
-            start_location TEXT,
-            end_location TEXT,
+            start_latitude REAL,
+            start_longitude REAL,
+            start_address TEXT,
+            end_latitude REAL,
+            end_longitude REAL,
+            end_address TEXT,
             customer_id TEXT,
             restaurant_id TEXT,
             driver_id TEXT,
@@ -66,7 +74,11 @@ def init_database():
             products_ordered TEXT,
             payment_method TEXT DEFAULT 'online',
             date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            details TEXT
+            details TEXT,
+            last_updated_by TEXT,
+            last_update_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            update_count INTEGER DEFAULT 0,
+            current_status_remarks TEXT DEFAULT 'Order placed'
         )
     ''')
     
@@ -83,6 +95,39 @@ def init_database():
             solution TEXT,
             status TEXT DEFAULT 'pending',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
+    # Create order_updates table for cross-actor update tracking
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS order_updates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            order_id TEXT NOT NULL,
+            actor_type TEXT NOT NULL,
+            actor_username TEXT NOT NULL,
+            update_type TEXT NOT NULL,
+            description TEXT NOT NULL,
+            details TEXT,
+            affected_actors TEXT,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (order_id) REFERENCES orders(id)
+        )
+    ''')
+
+    # Create actor_notifications table for real-time notifications
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS actor_notifications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            order_id TEXT NOT NULL,
+            target_actor_type TEXT NOT NULL,
+            target_username TEXT NOT NULL,
+            notification_type TEXT NOT NULL,
+            message TEXT NOT NULL,
+            is_read BOOLEAN DEFAULT 0,
+            source_update_id INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (order_id) REFERENCES orders(id),
+            FOREIGN KEY (source_update_id) REFERENCES order_updates(id)
         )
     ''')
     
@@ -124,181 +169,167 @@ def init_database():
         demo_users
     )
     
-    # Insert comprehensive demo orders for testing all scenarios
+    # Insert comprehensive demo orders for testing all scenarios with coordinate-based locations
     demo_orders = [
         # === GRAB FOOD CUSTOMER ORDERS ===
         # High credibility customer (customer1) - mostly successful orders
-        ('GF001', 'grab_food', 'customer', 'customer1', 'completed', 25.50, 
-         'Pizza Palace Restaurant', '123 Oak Street Apartment 4B', 'CUST001', 'REST001', 'DRV001',
-         'Pizza Palace', 'Margherita Pizza Large, Garlic Bread, Coca Cola', None, None,
+        ('GF001', 'grab_food', 'customer', 'customer1', 'completed', 25.50,
+         12.9352, 77.6245, 'Pizza Palace Restaurant, Koramangala', 12.9279, 77.6271, '123 Oak Street Apartment 4B, Jayanagar',
+         'CUST001', 'REST001', 'DRV001', 'Pizza Palace', 'Margherita Pizza Large, Garlic Bread, Coca Cola', None, None,
          'online', '2024-08-15', '{"restaurant": "Pizza Palace", "total": 25.50, "rating": 5}'),
-        
+
         ('GF002', 'grab_food', 'customer', 'customer1', 'completed', 32.75,
-         'Burger Joint', '123 Oak Street Apartment 4B', 'CUST001', 'REST002', 'DRV002', 
-         'Burger Joint', 'Double Cheeseburger, Large Fries, Chocolate Milkshake', None, None,
+         12.9698, 77.7500, 'Burger Joint, Whitefield', 12.9279, 77.6271, '123 Oak Street Apartment 4B, Jayanagar',
+         'CUST001', 'REST002', 'DRV002', 'Burger Joint', 'Double Cheeseburger, Large Fries, Chocolate Milkshake', None, None,
          'upi', '2024-08-20', '{"restaurant": "Burger Joint", "total": 32.75, "rating": 4}'),
-        
+
         ('GF003', 'grab_food', 'customer', 'customer1', 'completed', 18.90,
-         'Taco Bell', '123 Oak Street Apartment 4B', 'CUST001', 'REST003', 'DRV003',
-         'Taco Bell', 'Crunchy Taco Supreme, Nachos, Pepsi', None, None,
+         12.9716, 77.5946, 'Taco Bell, MG Road', 12.9279, 77.6271, '123 Oak Street Apartment 4B, Jayanagar',
+         'CUST001', 'REST003', 'DRV003', 'Taco Bell', 'Crunchy Taco Supreme, Nachos, Pepsi', None, None,
          'card', '2024-09-01', '{"restaurant": "Taco Bell", "total": 18.90, "rating": 5}'),
         
         # Medium credibility customer (customer2) - mixed experience
         ('GF004', 'grab_food', 'customer', 'customer2', 'completed', 28.40,
-         'Italian Bistro', '456 Pine Road House 12', 'CUST002', 'REST004', 'DRV004',
-         'Italian Bistro', 'Chicken Alfredo, Caesar Salad, Garlic Bread', None, None,
+         12.9141, 77.6023, 'Italian Bistro, Banashankari', 12.9698, 77.7500, '456 Pine Road House 12, Whitefield',
+         'CUST002', 'REST004', 'DRV004', 'Italian Bistro', 'Chicken Alfredo, Caesar Salad, Garlic Bread', None, None,
          'cod', '2024-08-25', '{"restaurant": "Italian Bistro", "total": 28.40, "rating": 3}'),
-         
+
         ('GF005', 'grab_food', 'customer', 'customer2', 'cancelled', 22.00,
-         'Chinese Palace', '456 Pine Road House 12', 'CUST002', 'REST005', None,
-         'Chinese Palace', 'Sweet and Sour Chicken, Fried Rice', None, None,
+         12.9279, 77.5946, 'Chinese Palace, Brigade Road', 12.9698, 77.7500, '456 Pine Road House 12, Whitefield',
+         'CUST002', 'REST005', None, 'Chinese Palace', 'Sweet and Sour Chicken, Fried Rice', None, None,
          'online', '2024-09-02', '{"restaurant": "Chinese Palace", "total": 22.00, "cancelled_reason": "long_wait"}'),
-        
+
         ('GF006', 'grab_food', 'customer', 'customer2', 'in_progress', 19.75,
-         'Subway', '456 Pine Road House 12', 'CUST002', 'REST006', 'DRV005',
-         'Subway', 'Chicken Teriyaki Footlong, Cookies, Orange Juice', None, None,
+         12.9698, 77.7500, 'Subway, Whitefield Main Road', 12.9698, 77.7500, '456 Pine Road House 12, Whitefield',
+         'CUST002', 'REST006', 'DRV005', 'Subway', 'Chicken Teriyaki Footlong, Cookies, Orange Juice', None, None,
          'online', '2024-09-06', '{"restaurant": "Subway", "total": 19.75}'),
         
         # Low credibility customer (customer3) - frequent complaints
         ('GF007', 'grab_food', 'customer', 'customer3', 'completed', 31.20,
-         'Steakhouse', '789 Elm Avenue Floor 3', 'CUST003', 'REST007', 'DRV006',
-         'Premium Steakhouse', 'Ribeye Steak, Mashed Potatoes, Wine', None, None,
+         12.9716, 77.5946, 'Premium Steakhouse, UB City Mall', 12.9141, 77.6023, '789 Elm Avenue Floor 3, Banashankari',
+         'CUST003', 'REST007', 'DRV006', 'Premium Steakhouse', 'Ribeye Steak, Mashed Potatoes, Wine', None, None,
          'card', '2024-08-30', '{"restaurant": "Premium Steakhouse", "total": 31.20, "rating": 2, "complaint": "food_cold"}'),
-        
+
         ('GF008', 'grab_food', 'customer', 'customer3', 'cancelled', 15.50,
-         'Fast Food Corner', '789 Elm Avenue Floor 3', 'CUST003', 'REST008', None,
-         'Fast Food Corner', 'Chicken Nuggets, Fries', None, None,
+         12.9716, 77.5946, 'Fast Food Corner, Brigade Road', 12.9141, 77.6023, '789 Elm Avenue Floor 3, Banashankari',
+         'CUST003', 'REST008', None, 'Fast Food Corner', 'Chicken Nuggets, Fries', None, None,
          'cod', '2024-09-03', '{"restaurant": "Fast Food Corner", "total": 15.50, "cancelled_reason": "address_wrong"}'),
-         
+
         # Good customer (john_doe)
         ('GF009', 'grab_food', 'customer', 'john_doe', 'completed', 45.80,
-         'Sushi World', '321 Maple Drive Apartment 8A', 'CUST004', 'REST009', 'DRV007',
-         'Sushi World', 'California Roll, Salmon Sashimi, Miso Soup, Green Tea', None, None,
+         12.9352, 77.6245, 'Sushi World, Koramangala', 12.9352, 77.6245, '321 Maple Drive Apartment 8A, Koramangala',
+         'CUST004', 'REST009', 'DRV007', 'Sushi World', 'California Roll, Salmon Sashimi, Miso Soup, Green Tea', None, None,
          'online', '2024-09-05', '{"restaurant": "Sushi World", "total": 45.80, "rating": 5}'),
-         
+
         # Average customer (jane_smith)
         ('GF010', 'grab_food', 'customer', 'jane_smith', 'completed', 27.30,
-         'Mediterranean Grill', '654 Cedar Lane House 5', 'CUST005', 'REST010', 'DRV008',
-         'Mediterranean Grill', 'Chicken Shawarma, Hummus, Pita Bread, Lemonade', None, None,
+         12.9279, 77.6271, 'Mediterranean Grill, Jayanagar', 12.9279, 77.6271, '654 Cedar Lane House 5, Jayanagar',
+         'CUST005', 'REST010', 'DRV008', 'Mediterranean Grill', 'Chicken Shawarma, Hummus, Pita Bread, Lemonade', None, None,
          'upi', '2024-09-04', '{"restaurant": "Mediterranean Grill", "total": 27.30, "rating": 4}'),
          
         # === GRAB EXPRESS CUSTOMER ORDERS ===
         # High credibility customer (customer1) - express delivery orders
         ('GE001', 'grab_express', 'customer', 'customer1', 'completed', 12.50,
-         'Electronics Store Downtown', '123 Oak Street Apartment 4B', 'CUST001', None, 'EXP001',
-         None, None, None, 'Smartphone Case, Screen Protector, Charging Cable',
+         12.9716, 77.5946, 'Electronics Store Downtown, MG Road', 12.9279, 77.6271, '123 Oak Street Apartment 4B, Jayanagar',
+         'CUST001', None, 'EXP001', None, None, None, 'Smartphone Case, Screen Protector, Charging Cable',
          'online', '2024-09-01', '{"pickup_location": "Electronics Store Downtown", "delivery_time_minutes": 45, "vehicle_type": "Bike", "package_size": "Small", "rating": 5}'),
-         
+
         ('GE002', 'grab_express', 'customer', 'customer1', 'completed', 25.80,
-         'Office Supply Center', '123 Oak Street Apartment 4B', 'CUST001', None, 'EXP002', 
-         None, None, None, 'Laptop Stand, Wireless Mouse, Notebook Set',
+         12.9698, 77.7500, 'Office Supply Center, Whitefield', 12.9279, 77.6271, '123 Oak Street Apartment 4B, Jayanagar',
+         'CUST001', None, 'EXP002', None, None, None, 'Laptop Stand, Wireless Mouse, Notebook Set',
          'card', '2024-09-03', '{"pickup_location": "Office Supply Center", "delivery_time_minutes": 60, "vehicle_type": "Car", "package_size": "Medium", "rating": 4}'),
-         
+
         ('GE003', 'grab_express', 'customer', 'customer1', 'in_progress', 35.00,
-         'Furniture Warehouse', '123 Oak Street Apartment 4B', 'CUST001', None, 'EXP003',
-         None, None, None, 'Office Chair (Disassembled), Desk Lamp',
+         13.0827, 80.2707, 'Furniture Warehouse, Electronic City', 12.9279, 77.6271, '123 Oak Street Apartment 4B, Jayanagar',
+         'CUST001', None, 'EXP003', None, None, None, 'Office Chair (Disassembled), Desk Lamp',
          'cod', '2024-09-06', '{"pickup_location": "Furniture Warehouse", "estimated_delivery_minutes": 90, "vehicle_type": "Truck", "package_size": "Large", "special_instructions": "Fragile - Handle with care"}'),
         
         # === GRAB FOOD DELIVERY AGENT ORDERS ===
         ('GF011', 'grab_food', 'delivery_agent', 'agent1', 'assigned', 0.00,
-         'Pizza Palace', '123 Oak Street Apartment 4B', None, 'REST001', 'agent1',
-         'Pizza Palace', 'Pickup Order GF001', None, None,
+         12.9352, 77.6245, 'Pizza Palace, Koramangala', 12.9279, 77.6271, '123 Oak Street Apartment 4B, Jayanagar',
+         None, 'REST001', 'agent1', 'Pizza Palace', 'Pickup Order GF001', None, None,
          'online', '2024-09-06', '{"assigned_order": "GF001", "pickup_time": "19:30", "estimated_delivery": "20:00"}'),
-         
+
         ('GF012', 'grab_food', 'delivery_agent', 'agent2', 'delivering', 0.00,
-         'Burger Joint', '456 Pine Road House 12', None, 'REST002', 'agent2',
-         'Burger Joint', 'Delivery in Progress Order GF006', None, None,
+         12.9698, 77.7500, 'Burger Joint, Whitefield', 12.9698, 77.7500, '456 Pine Road House 12, Whitefield',
+         None, 'REST002', 'agent2', 'Burger Joint', 'Delivery in Progress Order GF006', None, None,
          'cod', '2024-09-06', '{"assigned_order": "GF006", "pickup_time": "20:15", "gps_issues": "true"}'),
-         
+
         ('GF013', 'grab_food', 'delivery_agent', 'agent3', 'completed', 0.00,
-         'Italian Bistro', '789 Elm Avenue Floor 3', None, 'REST004', 'agent3',
-         'Italian Bistro', 'Completed Delivery GF007', None, None,
+         12.9141, 77.6023, 'Italian Bistro, Banashankari', 12.9141, 77.6023, '789 Elm Avenue Floor 3, Banashankari',
+         None, 'REST004', 'agent3', 'Italian Bistro', 'Completed Delivery GF007', None, None,
          'online', '2024-09-05', '{"assigned_order": "GF007", "delivery_time": "21:45", "customer_rating": 5}'),
          
         # === GRAB FOOD RESTAURANT ORDERS ===
         ('GF014', 'grab_food', 'restaurant', 'resto1', 'preparing', 0.00,
-         'Restaurant Kitchen', 'Preparation Area', None, 'resto1', None,
-         'Pizza Palace Kitchen', 'Preparing Order GF001 - Margherita Pizza', None, None,
+         12.9352, 77.6245, 'Pizza Palace Kitchen, Koramangala', 12.9352, 77.6245, 'Preparation Area, Koramangala',
+         None, 'resto1', None, 'Pizza Palace Kitchen', 'Preparing Order GF001 - Margherita Pizza', None, None,
          'online', '2024-09-06', '{"preparing_order": "GF001", "items": 3, "prep_time_minutes": 25}'),
-         
+
         ('GF015', 'grab_food', 'restaurant', 'resto2', 'ready', 0.00,
-         'Restaurant Kitchen', 'Pickup Counter', None, 'resto2', None,
-         'Burger Joint Kitchen', 'Order Ready GF006 - Awaiting Pickup', None, None,
+         12.9698, 77.7500, 'Burger Joint Kitchen, Whitefield', 12.9698, 77.7500, 'Pickup Counter, Whitefield',
+         None, 'resto2', None, 'Burger Joint Kitchen', 'Order Ready GF006 - Awaiting Pickup', None, None,
          'cod', '2024-09-06', '{"ready_order": "GF006", "items": 3, "waiting_time_minutes": 15, "ingredients_shortage": "pickles"}'),
-         
+
         ('GF016', 'grab_food', 'restaurant', 'resto3', 'delayed', 0.00,
-         'Restaurant Kitchen', 'Preparation Area', None, 'resto3', None,
-         'Italian Bistro Kitchen', 'Delayed Order GF004 - High Volume', None, None,
+         12.9141, 77.6023, 'Italian Bistro Kitchen, Banashankari', 12.9141, 77.6023, 'Preparation Area, Banashankari',
+         None, 'resto3', None, 'Italian Bistro Kitchen', 'Delayed Order GF004 - High Volume', None, None,
          'online', '2024-09-06', '{"delayed_order": "GF004", "delay_reason": "high_volume", "estimated_delay_minutes": 30}'),
         
         # === GRAB CABS ORDERS ===
         # Customer cab orders
         ('GC001', 'grab_cabs', 'customer', 'customer1', 'completed', 15.00,
-         'Downtown Mall', 'International Airport', 'CUST001', None, 'DRV101',
-         None, None, 'Sedan', None,
-         'upi', '2024-09-02', '{"from": "Downtown Mall", "to": "Airport", "distance_km": 12, "duration_minutes": 35}'),
-         
+         12.9716, 77.5946, 'Forum Mall, Koramangala', 13.1986, 77.7066, 'Kempegowda International Airport',
+         'CUST001', None, 'DRV101', None, None, 'Sedan', None,
+         'upi', '2024-09-02', '{"from": "Forum Mall", "to": "Airport", "distance_km": 35, "duration_minutes": 55}'),
+
         ('GC002', 'grab_cabs', 'customer', 'john_doe', 'in_progress', 8.50,
-         'Central Railway Station', 'Business District Office Tower', 'CUST004', None, 'DRV102',
-         None, None, 'Hatchback', None,
+         12.9767, 77.5993, 'Bangalore City Railway Station', 12.9716, 77.5946, 'UB City Mall, MG Road',
+         'CUST004', None, 'DRV102', None, None, 'Hatchback', None,
          'online', '2024-09-06', '{"from": "Railway Station", "to": "Business District", "driver_name": "Alex Kumar"}'),
-         
+
         # Driver orders
         ('GC003', 'grab_cabs', 'driver', 'driver1', 'active', 12.75,
-         'City Center', 'Residential Complex', 'CUST006', None, 'driver1',
-         None, None, 'SUV', None,
-         'cod', '2024-09-06', '{"passenger": "Sarah Wilson", "pickup": "City Center", "destination": "Green Valley"}'),
+         12.9716, 77.5946, 'MG Road Metro Station', 12.8438, 77.6606, 'Residential Complex, Bannerghatta',
+         'CUST006', None, 'driver1', None, None, 'SUV', None,
+         'cod', '2024-09-06', '{"passenger": "Sarah Wilson", "pickup": "MG Road", "destination": "Bannerghatta"}'),
          
         ('GC004', 'grab_cabs', 'driver', 'driver2', 'completed', 22.30,
-         'Hotel Grand Plaza', 'Shopping Mall', 'CUST007', None, 'driver2',
-         None, None, 'Sedan', None,
+         12.9716, 77.5946, 'Hotel Grand Plaza, UB City', 12.9352, 77.6245, 'Forum Mall, Koramangala',
+         'CUST007', None, 'driver2', None, None, 'Sedan', None,
          'card', '2024-09-05', '{"passenger": "Mike Johnson", "trip_rating": 5, "tip_amount": 2.50}'),
         
         # === GRAB MART ORDERS ===
         # Customer grocery orders
         ('GM001', 'grab_mart', 'customer', 'customer1', 'completed', 67.80,
-         'FreshMart Store', '123 Oak Street Apartment 4B', 'CUST001', 'STORE001', 'DRV201',
-         None, None, None, 'Milk, Bread, Eggs, Fruits, Vegetables, Cheese, Yogurt',
+         12.9279, 77.6271, 'FreshMart Store, Jayanagar', 12.9279, 77.6271, '123 Oak Street Apartment 4B, Jayanagar',
+         'CUST001', 'STORE001', 'DRV201', None, None, None, 'Milk, Bread, Eggs, Fruits, Vegetables, Cheese, Yogurt',
          'card', '2024-09-03', '{"store": "FreshMart", "items": 15, "total": 67.80, "delivery_instructions": "Leave at door"}'),
          
         ('GM002', 'grab_mart', 'customer', 'jane_smith', 'in_progress', 43.20,
-         'SuperMart', '654 Cedar Lane House 5', 'CUST005', 'STORE002', 'DRV202',
-         None, None, None, 'Rice, Cooking Oil, Spices, Onions, Potatoes, Chicken',
+         12.9698, 77.7500, 'SuperMart, Whitefield', 12.9279, 77.6271, '654 Cedar Lane House 5, Jayanagar',
+         'CUST005', 'STORE002', 'DRV202', None, None, None, 'Rice, Cooking Oil, Spices, Onions, Potatoes, Chicken',
          'online', '2024-09-06', '{"store": "SuperMart", "items": 12, "special_instructions": "Call before delivery"}'),
          
         # Dark store orders
-        ('GM003', 'grab_mart', 'darkstore', 'store1', 'picking', 58.90,
-         'Dark Store Warehouse A', 'Customer Delivery Zone', 'CUST008', 'STORE001', None,
-         None, None, None, 'Frozen Foods, Dairy Products, Snacks, Beverages',
+        ('GM003', 'grab_mart', 'dark_house', 'store1', 'picking', 58.90,
+         12.9279, 77.6271, 'Dark Store Warehouse A, Jayanagar', 12.9352, 77.6245, 'Customer Delivery Zone, Koramangala',
+         'CUST008', 'STORE001', None, None, None, None, 'Frozen Foods, Dairy Products, Snacks, Beverages',
          'cod', '2024-09-06', '{"picking_order": "GM002", "items_picked": 8, "items_remaining": 4, "picker_id": "PICK001"}'),
-         
-        ('GM004', 'grab_mart', 'darkstore', 'store2', 'completed', 91.45,
-         'Dark Store Warehouse B', 'Premium Residential Area', 'CUST009', 'STORE002', 'DRV203',
-         None, None, None, 'Organic Vegetables, Premium Meats, Imported Cheese, Wine',
-         'card', '2024-09-04', '{"completed_order": "GM001", "items": 20, "quality_check": "passed", "delivery_rating": 4}'),
-         
+
         # More grab_express orders for variety
         ('GE004', 'grab_express', 'customer', 'john_doe', 'completed', 18.90,
-         'Medical Pharmacy', '321 Maple Drive Apartment 8A', 'CUST004', None, 'EXP004',
-         None, None, None, 'Prescription Medicines, Medical Supplies',
-         'online', '2024-09-02', '{"pickup_location": "Medical Pharmacy", "delivery_time_minutes": 30, "vehicle_type": "Bike", "package_size": "Small", "urgent_delivery": true, "rating": 5}'),
-         
-        ('GE005', 'grab_express', 'customer', 'jane_smith', 'completed', 42.60,
-         'Home Appliance Store', '654 Cedar Lane House 5', 'CUST005', None, 'EXP005',
-         None, None, None, 'Microwave Oven (Small), Kitchen Utensils Set',
-         'upi', '2024-08-28', '{"pickup_location": "Home Appliance Store", "delivery_time_minutes": 75, "vehicle_type": "Car", "package_size": "Medium", "rating": 4}'),
-         
-        ('GE006', 'grab_express', 'customer', 'customer2', 'cancelled', 55.00,
-         'Industrial Supply Co', '456 Pine Road House 12', 'CUST002', None, None,
-         None, None, None, 'Heavy Machinery Parts, Tools Set',
-         'cod', '2024-09-05', '{"pickup_location": "Industrial Supply Co", "cancelled_reason": "vehicle_capacity_insufficient", "required_vehicle": "Truck", "assigned_vehicle": "Car"}')
+         12.9352, 77.6245, 'Medical Pharmacy, Koramangala', 12.9352, 77.6245, '321 Maple Drive Apartment 8A, Koramangala',
+         'CUST004', None, 'EXP004', None, None, None, 'Prescription Medicines, Medical Supplies',
+         'online', '2024-09-02', '{"pickup_location": "Medical Pharmacy", "delivery_time_minutes": 30, "vehicle_type": "Bike", "package_size": "Small", "urgent_delivery": true, "rating": 5}')
     ]
     
     cursor.executemany('''
-        INSERT OR IGNORE INTO orders 
-        (id, service, user_type, username, status, price, start_location, end_location,
-         customer_id, restaurant_id, driver_id, restaurant_name, food_items, cab_type, products_ordered, payment_method, date, details) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT OR IGNORE INTO orders
+        (id, service, user_type, username, status, price, start_latitude, start_longitude, start_address,
+         end_latitude, end_longitude, end_address, customer_id, restaurant_id, driver_id, restaurant_name,
+         food_items, cab_type, products_ordered, payment_method, date, details)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', demo_orders)
     
     # Insert demo complaints for credibility testing
@@ -412,11 +443,11 @@ def get_orders(user_type, username):
     cursor = conn.cursor()
     
     cursor.execute('''
-        SELECT id, service, user_type, username, status, price, start_location, end_location,
-               customer_id, restaurant_id, driver_id, restaurant_name, food_items, cab_type, 
-               products_ordered, payment_method, date, details 
-        FROM orders 
-        WHERE user_type = ? AND username = ? 
+        SELECT id, service, user_type, username, status, price, start_latitude, start_longitude, start_address,
+               end_latitude, end_longitude, end_address, customer_id, restaurant_id, driver_id, restaurant_name,
+               food_items, cab_type, products_ordered, payment_method, date, details
+        FROM orders
+        WHERE user_type = ? AND username = ?
         ORDER BY date DESC
     ''', (user_type, username))
     
@@ -429,18 +460,22 @@ def get_orders(user_type, username):
             'username': row[3],
             'status': row[4],
             'price': row[5],
-            'start_location': row[6],
-            'end_location': row[7],
-            'customer_id': row[8],
-            'restaurant_id': row[9],
-            'driver_id': row[10],
-            'restaurant_name': row[11],
-            'food_items': row[12],
-            'cab_type': row[13],
-            'products_ordered': row[14],
-            'payment_method': row[15],
-            'date': row[16],
-            'details': safe_json_loads(row[17])
+            'start_latitude': row[6],
+            'start_longitude': row[7],
+            'start_address': row[8],
+            'end_latitude': row[9],
+            'end_longitude': row[10],
+            'end_address': row[11],
+            'customer_id': row[12],
+            'restaurant_id': row[13],
+            'driver_id': row[14],
+            'restaurant_name': row[15],
+            'food_items': row[16],
+            'cab_type': row[17],
+            'products_ordered': row[18],
+            'payment_method': row[19],
+            'date': row[20],
+            'details': safe_json_loads(row[21])
         })
     
     conn.close()
@@ -631,7 +666,8 @@ def submit_complaint():
             service=data['service'],
             user_type=data['user_type'],
             image_data=data.get('image_data'),
-            username=data.get('username', 'anonymous')
+            username=data.get('username', 'anonymous'),
+            order_id=data.get('order_id')
         )
         
         print(f"AI Engine Success: {len(solution)} characters generated")
@@ -667,11 +703,11 @@ def get_user_orders_context(username, service, user_type, specific_order_id=None
         
         # Get recent orders for this user and service
         cursor.execute("""
-            SELECT id, service, status, price, restaurant_name, start_location, end_location, 
-                   food_items, products_ordered, cab_type, date, payment_method, details
-            FROM orders 
+            SELECT id, service, status, price, restaurant_name, start_latitude, start_longitude, start_address,
+                   end_latitude, end_longitude, end_address, food_items, products_ordered, cab_type, date, payment_method, details
+            FROM orders
             WHERE username = ? AND service = ?
-            ORDER BY date DESC 
+            ORDER BY date DESC
             LIMIT 10
         """, (username, service))
         
@@ -684,21 +720,21 @@ def get_user_orders_context(username, service, user_type, specific_order_id=None
         if specific_order_id:
             # First, get the specific order
             cursor.execute("""
-                SELECT id, service, status, price, restaurant_name, start_location, end_location,
-                       food_items, products_ordered, cab_type, date, payment_method, details
-                FROM orders 
+                SELECT id, service, status, price, restaurant_name, start_latitude, start_longitude, start_address,
+                       end_latitude, end_longitude, end_address, food_items, products_ordered, cab_type, date, payment_method, details
+                FROM orders
                 WHERE id = ? AND username = ?
             """, (specific_order_id, username))
-            
+
             specific_order = cursor.fetchone()
-            
+
             if specific_order:
                 orders_context.append(f"SPECIFIC ORDER COMPLAINT for {username}:")
-                order_id, svc, status, price, restaurant, start_location, end_location, food_items, products_ordered, cab_type, date, payment, details = specific_order
-                
+                order_id, svc, status, price, restaurant, start_lat, start_lng, start_addr, end_lat, end_lng, end_addr, food_items, products_ordered, cab_type, date, payment, details = specific_order
+
                 # Get the appropriate items field based on service
                 items = food_items if food_items else (products_ordered if products_ordered else cab_type)
-                address = end_location if end_location else start_location
+                address = end_addr if end_addr else start_addr
                 
                 # Parse details safely
                 details_obj = safe_json_loads(details) if details else {}
@@ -733,11 +769,11 @@ def get_user_orders_context(username, service, user_type, specific_order_id=None
         
         if orders:
             for order in orders:
-                order_id, svc, status, price, restaurant, start_location, end_location, food_items, products_ordered, cab_type, date, payment, details = order
-                
+                order_id, svc, status, price, restaurant, start_lat, start_lng, start_addr, end_lat, end_lng, end_addr, food_items, products_ordered, cab_type, date, payment, details = order
+
                 # Get the appropriate items field based on service
                 items = food_items if food_items else (products_ordered if products_ordered else cab_type)
-                address = end_location if end_location else start_location
+                address = end_addr if end_addr else start_addr
                 
                 # Skip the specific order if it's already highlighted above
                 if specific_order_id and order_id == specific_order_id:
@@ -810,7 +846,8 @@ def chat():
             'current_issue': None,
             'awaiting_image': False,
             'category': category,
-            'sub_issue': sub_issue
+            'sub_issue': sub_issue,
+            'order_id': order_id
         }
     
     session = conversation_sessions[conversation_id]
@@ -958,7 +995,8 @@ def chat_image():
                 service=service,
                 user_type=user_type,
                 image_data=image_data,
-                username=session.get('username', 'anonymous')
+                username=session.get('username', 'anonymous'),
+                order_id=session.get('order_id')
             )
             
             session['messages'].append({'role': 'assistant', 'content': response_text})
@@ -1050,23 +1088,30 @@ def generate_ai_solution(complaint_data):
                 # Call the specific method if it exists
                 if hasattr(handler_instance, sub_issue):
                     method = getattr(handler_instance, sub_issue)
-                    # Check if method accepts image_data parameter
+                    # Check method signature for supported parameters
                     import inspect
                     sig = inspect.signature(method)
+
+                    # Build method call with available parameters
+                    method_kwargs = {}
                     if 'image_data' in sig.parameters:
-                        result = method(description, image_data=image_data)
-                        print(f"AI Handler Result (with image): {result[:200] if result else 'None'}...")
-                        if result and not result.startswith("Thank you for your complaint"):
-                            return result
-                        else:
-                            print("AI returned generic fallback, trying direct AI call...")
+                        method_kwargs['image_data'] = image_data
+                    if 'username' in sig.parameters:
+                        method_kwargs['username'] = complaint_data.get('username', 'anonymous')
+                    if 'order_id' in sig.parameters:
+                        method_kwargs['order_id'] = complaint_data.get('order_id')
+
+                    # Call method with appropriate parameters
+                    if method_kwargs:
+                        result = method(description, **method_kwargs)
                     else:
                         result = method(description)
-                        print(f"AI Handler Result (text-only): {result[:200] if result else 'None'}...")
-                        if result and not result.startswith("Thank you for your complaint"):
-                            return result
-                        else:
-                            print("AI returned generic fallback, trying direct AI call...")
+
+                    print(f"AI Handler Result: {result[:200] if result else 'None'}...")
+                    if result and not result.startswith("Thank you for your complaint"):
+                        return result
+                    else:
+                        print("AI returned generic fallback, trying direct AI call...")
                 else:
                     print(f"Method {sub_issue} not found in handler")
                     
@@ -1080,7 +1125,9 @@ def generate_ai_solution(complaint_data):
                     user_query=description,
                     service=service,
                     user_type=user_type,
-                    image_data=image_data
+                    image_data=image_data,
+                    username=complaint_data.get('username', 'anonymous'),
+                    order_id=complaint_data.get('order_id')
                 )
                 
                 print(f"Direct AI Result: {direct_result[:200] if direct_result else 'None'}...")
@@ -1111,7 +1158,9 @@ def generate_ai_solution(complaint_data):
             user_query=complaint_data['description'],
             service=complaint_data['service'],
             user_type=complaint_data['user_type'],
-            image_data=complaint_data.get('image_data')
+            image_data=complaint_data.get('image_data'),
+            username=complaint_data.get('username', 'anonymous'),
+            order_id=complaint_data.get('order_id')
         )
         
         if final_result and len(final_result) > 100:
@@ -1123,6 +1172,123 @@ def generate_ai_solution(complaint_data):
     # Absolute fallback
     print("Using absolute fallback response")
     return f"Thank you for your complaint. We have received your issue regarding {complaint_data['description'][:100]}... and our team is working on a resolution. You will receive an update within 24 hours."
+
+@app.route('/api/order-update', methods=['POST'])
+def create_order_update():
+    """Create a cross-actor update for an order"""
+    data = request.json
+
+    required_fields = ['order_id', 'actor_type', 'actor_username', 'update_type', 'details']
+    if not all(field in data for field in required_fields):
+        return jsonify({'error': 'Missing required fields'}), 400
+
+    success = cross_actor_service.create_cross_actor_update(
+        order_id=data['order_id'],
+        actor_type=data['actor_type'],
+        actor_username=data['actor_username'],
+        update_type=data['update_type'],
+        details=data['details']
+    )
+
+    if success:
+        return jsonify({'success': True, 'message': 'Update created successfully'})
+    else:
+        return jsonify({'success': False, 'message': 'Failed to create update (possibly blocked by spam prevention)'}), 400
+
+@app.route('/api/notifications/<actor_type>/<username>', methods=['GET'])
+def get_notifications(actor_type, username):
+    """Get notifications for a specific actor"""
+    unread_only = request.args.get('unread_only', 'false').lower() == 'true'
+
+    notifications = cross_actor_service.get_notifications_for_actor(
+        actor_type=actor_type,
+        username=username,
+        unread_only=unread_only
+    )
+
+    return jsonify({'notifications': notifications})
+
+@app.route('/api/notifications/<int:notification_id>/read', methods=['PUT'])
+def mark_notification_read(notification_id):
+    """Mark a notification as read"""
+    success = cross_actor_service.mark_notification_as_read(notification_id)
+
+    if success:
+        return jsonify({'success': True, 'message': 'Notification marked as read'})
+    else:
+        return jsonify({'success': False, 'message': 'Failed to mark notification as read'}), 400
+
+@app.route('/api/order-history/<order_id>', methods=['GET'])
+def get_order_history(order_id):
+    """Get complete update timeline for an order"""
+    timeline = cross_actor_service.get_order_update_timeline(order_id)
+
+    return jsonify({'timeline': timeline})
+
+@app.route('/api/orders/<user_type>/<username>/with-updates', methods=['GET'])
+def get_orders_with_updates(user_type, username):
+    """Get orders with update counts and recent notifications"""
+    conn = sqlite3.connect(DATABASE_PATH)
+    cursor = conn.cursor()
+
+    try:
+        # Get orders with update counts
+        cursor.execute('''
+            SELECT o.id, o.service, o.user_type, o.username, o.status, o.price,
+                   o.start_latitude, o.start_longitude, o.start_address,
+                   o.end_latitude, o.end_longitude, o.end_address,
+                   o.customer_id, o.restaurant_id, o.driver_id, o.restaurant_name,
+                   o.food_items, o.cab_type, o.products_ordered, o.payment_method,
+                   o.date, o.details, o.update_count, o.current_status_remarks,
+                   o.last_updated_by, o.last_update_timestamp,
+                   COUNT(an.id) as unread_notifications
+            FROM orders o
+            LEFT JOIN actor_notifications an ON o.id = an.order_id
+                AND an.target_actor_type = ? AND an.target_username = ? AND an.is_read = 0
+            WHERE o.user_type = ? AND o.username = ?
+            GROUP BY o.id
+            ORDER BY o.date DESC
+        ''', (user_type, username, user_type, username))
+
+        orders = []
+        for row in cursor.fetchall():
+            orders.append({
+                'id': row[0],
+                'service': row[1],
+                'user_type': row[2],
+                'username': row[3],
+                'status': row[4],
+                'price': row[5],
+                'start_latitude': row[6],
+                'start_longitude': row[7],
+                'start_address': row[8],
+                'end_latitude': row[9],
+                'end_longitude': row[10],
+                'end_address': row[11],
+                'customer_id': row[12],
+                'restaurant_id': row[13],
+                'driver_id': row[14],
+                'restaurant_name': row[15],
+                'food_items': row[16],
+                'cab_type': row[17],
+                'products_ordered': row[18],
+                'payment_method': row[19],
+                'date': row[20],
+                'details': safe_json_loads(row[21]),
+                'update_count': row[22] or 0,
+                'current_status_remarks': row[23] or 'Order placed',
+                'last_updated_by': row[24],
+                'last_update_timestamp': row[25],
+                'unread_notifications': row[26] or 0
+            })
+
+        return jsonify({'orders': orders})
+
+    except Exception as e:
+        print(f"Error fetching orders with updates: {e}")
+        return jsonify({'error': 'Failed to fetch orders'}), 500
+    finally:
+        conn.close()
 
 if __name__ == '__main__':
     init_database()

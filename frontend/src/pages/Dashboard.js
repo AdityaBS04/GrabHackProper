@@ -9,11 +9,15 @@ import FloatingActionButton from '../components/FloatingActionButton';
 import AnimatedCard from '../components/AnimatedCard';
 import InteractiveIcon from '../components/InteractiveIcon';
 import PulsingOrb from '../components/PulsingOrb';
+import NotificationCenter from '../components/NotificationCenter';
+import OrderTimeline from '../components/OrderTimeline';
 
 const Dashboard = () => {
   const [user, setUser] = useState(null);
   const [orders, setOrders] = useState([]);
   const [selectedService, setSelectedService] = useState('');
+  const [selectedOrderId, setSelectedOrderId] = useState(null);
+  const [showTimeline, setShowTimeline] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -30,7 +34,14 @@ const Dashboard = () => {
 
   const fetchOrders = async (userData) => {
     try {
-      const response = await api.get(`/orders/${userData.type}/${userData.username}`);
+      // Try new endpoint first (with update counts)
+      let response;
+      try {
+        response = await api.get(`/orders/${userData.type}/${userData.username}/with-updates`);
+      } catch (updateError) {
+        // Fallback to original endpoint
+        response = await api.get(`/orders/${userData.type}/${userData.username}`);
+      }
       setOrders(response.data.orders || []);
     } catch (error) {
       console.error('Error fetching orders:', error);
@@ -44,6 +55,16 @@ const Dashboard = () => {
 
   const handleComplaint = (service, orderId = null) => {
     navigate('/complaint', { state: { service, userType: user.type, orderId } });
+  };
+
+  const handleViewTimeline = (orderId) => {
+    setSelectedOrderId(orderId);
+    setShowTimeline(true);
+  };
+
+  const handleCloseTimeline = () => {
+    setSelectedOrderId(null);
+    setShowTimeline(false);
   };
 
   if (!user) return (
@@ -98,6 +119,9 @@ const Dashboard = () => {
             <h1 className="gradient-text">Hello, {user.username}!</h1>
             <p>{getUserTypeDisplay(user.type)}</p>
           </div>
+          <div className="mobile-header-actions">
+            <NotificationCenter user={user} />
+          </div>
         </div>
 
         <AnimatedCard>
@@ -118,11 +142,30 @@ const Dashboard = () => {
                   <div className="mobile-order-header">
                     <div className="mobile-order-id">
                       {getServiceEmoji(order.service)} {order.id}
+                      {(order.update_count > 0 || order.unread_notifications > 0) && (
+                        <span className="order-update-badge">
+                          {order.unread_notifications > 0
+                            ? `${order.unread_notifications} new`
+                            : `${order.update_count} updates`}
+                        </span>
+                      )}
                     </div>
                     <div className={`mobile-order-status ${getStatusClass(order.status)}`}>
                       {order.status.replace('_', ' ')}
                     </div>
                   </div>
+
+                  {/* Show current status remarks if available */}
+                  {order.current_status_remarks && order.current_status_remarks !== 'Order placed' && (
+                    <div className="order-status-remarks">
+                      💬 {order.current_status_remarks}
+                      {order.last_updated_by && (
+                        <span className="last-updated-by">
+                          - Updated by {order.last_updated_by}
+                        </span>
+                      )}
+                    </div>
+                  )}
                   
                   <div className="mobile-order-details">
                     <div><strong>Service:</strong> {order.service.replace('_', ' ')}</div>
@@ -175,13 +218,25 @@ const Dashboard = () => {
                       )}
                     </div>
                   )}
-                  
-                  <button 
-                    className="mobile-btn mobile-btn-secondary mobile-btn-small"
-                    onClick={() => handleComplaint(order.service, order.id)}
-                  >
-                    🆘 Report Issue
-                  </button>
+
+                  <div className="order-actions">
+                    <button
+                      className="mobile-btn mobile-btn-primary mobile-btn-small"
+                      onClick={() => handleViewTimeline(order.id)}
+                      title="View order timeline and updates"
+                    >
+                      📋 Timeline
+                      {order.update_count > 0 && (
+                        <span className="btn-badge">{order.update_count}</span>
+                      )}
+                    </button>
+                    <button
+                      className="mobile-btn mobile-btn-secondary mobile-btn-small"
+                      onClick={() => handleComplaint(order.service, order.id)}
+                    >
+                      🆘 Report Issue
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -203,11 +258,84 @@ const Dashboard = () => {
           </div>
         </AnimatedCard>
         
-        <FloatingActionButton 
+        <FloatingActionButton
           onClick={() => navigate('/complaint')}
           icon="🆘"
         />
+
+        {/* Order Timeline Modal */}
+        {showTimeline && selectedOrderId && (
+          <OrderTimeline
+            orderId={selectedOrderId}
+            onClose={handleCloseTimeline}
+          />
+        )}
       </div>
+
+      <style jsx>{`
+        .order-update-badge {
+          background: #ff4444;
+          color: white;
+          font-size: 10px;
+          padding: 2px 6px;
+          border-radius: 10px;
+          margin-left: 8px;
+          font-weight: bold;
+        }
+
+        .order-status-remarks {
+          background: #e3f2fd;
+          border-left: 4px solid #2196f3;
+          padding: 8px 12px;
+          margin: 8px 0;
+          font-size: 13px;
+          border-radius: 4px;
+        }
+
+        .last-updated-by {
+          color: #666;
+          font-size: 11px;
+          font-style: italic;
+        }
+
+        .order-actions {
+          display: flex;
+          gap: 8px;
+          margin-top: 12px;
+          flex-wrap: wrap;
+        }
+
+        .btn-badge {
+          background: #fff;
+          color: #007bff;
+          font-size: 10px;
+          padding: 1px 4px;
+          border-radius: 8px;
+          margin-left: 4px;
+          font-weight: bold;
+        }
+
+        .mobile-btn-primary {
+          background: #007bff;
+          color: white;
+          position: relative;
+        }
+
+        .mobile-btn-primary:hover {
+          background: #0056b3;
+        }
+
+        @media (max-width: 480px) {
+          .order-actions {
+            flex-direction: column;
+          }
+
+          .mobile-btn-small {
+            font-size: 12px;
+            padding: 8px 12px;
+          }
+        }
+      `}</style>
     </div>
   );
 };
