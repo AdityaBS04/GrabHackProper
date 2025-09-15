@@ -118,7 +118,7 @@ const ChatBot = () => {
 
   const handleSubIssueSelect = async (subIssueId, subIssueName) => {
     setSelectedSubIssue(subIssueId);
-    
+
     // Add user selection message
     const userMessage = {
       id: Date.now(),
@@ -127,15 +127,43 @@ const ChatBot = () => {
       timestamp: new Date()
     };
     setMessages(prev => [...prev, userMessage]);
-    
-    // Now start AI conversation
+
+    // Special handling for missing items - call dedicated endpoint
+    if (subIssueId === 'handle_missing_items') {
+      setLoading(true);
+      try {
+        const response = await api.post('/missing-items', {
+          message: `I need to report missing items from my order`,
+          username: username,
+          order_id: orderId
+        });
+
+        const botMessage = {
+          id: Date.now() + 1,
+          text: response.data.response || 'I apologize, but I encountered an error. Please try again.',
+          sender: 'bot',
+          timestamp: new Date()
+        };
+
+        setMessages(prev => [...prev, botMessage]);
+        setShowSubIssueSelection(false);
+        setLoading(false);
+        return;
+
+      } catch (error) {
+        console.error('Error getting missing items interface:', error);
+        setLoading(false);
+      }
+    }
+
+    // Default behavior for other issues
     const botMessage = {
       id: Date.now() + 1,
       text: 'Thank you for selecting your issue. Please describe what happened in detail, and I\'ll help you resolve it.',
       sender: 'bot',
       timestamp: new Date()
     };
-    
+
     setMessages(prev => [...prev, botMessage]);
     setShowSubIssueSelection(false);
   };
@@ -265,6 +293,260 @@ const ChatBot = () => {
     return userMap[userType] || '👤';
   };
 
+  // Function to check if message contains missing items selection interface
+  const isMissingItemsSelection = (text) => {
+    return text.includes('Which items are missing from your order?') ||
+           text.includes('Missing Items Selection') ||
+           text.includes('☐') ||
+           (text.includes('1.') && text.includes('2.') && text.includes('missing'));
+  };
+
+  // Function to parse items from missing items selection message
+  const parseMissingItemsOptions = (text) => {
+    const lines = text.split('\n');
+    const items = [];
+
+    for (const line of lines) {
+      const match = line.match(/☐\s*(\d+)\.\s*(.+)$/) || line.match(/^(\d+)\.\s*(.+)$/);
+      if (match) {
+        const [, number, itemName] = match;
+        items.push({
+          number: parseInt(number),
+          name: itemName.trim(),
+          selected: false
+        });
+      }
+    }
+
+    return items;
+  };
+
+  // Function to handle item selection
+  const handleItemSelection = (items, selectedItems) => {
+    if (selectedItems.length === 0) {
+      handleSendMessageDirect("All items are present");
+    } else {
+      const itemNumbers = selectedItems.map(item => item.number);
+      const itemNames = selectedItems.map(item => item.name);
+
+      if (itemNumbers.length === 1) {
+        handleSendMessageDirect(`Item ${itemNumbers[0]} is missing: ${itemNames[0]}`);
+      } else {
+        handleSendMessageDirect(`Items ${itemNumbers.join(', ')} are missing: ${itemNames.join(', ')}`);
+      }
+    }
+  };
+
+  // Function to send message directly (without user input)
+  const handleSendMessageDirect = async (messageText) => {
+    if (loading) return;
+
+    const userMessage = {
+      id: Date.now(),
+      text: messageText,
+      sender: 'user',
+      timestamp: new Date()
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setLoading(true);
+
+    try {
+      const response = await api.post('/chat', {
+        message: messageText,
+        service,
+        user_type: userType,
+        username: username,
+        conversation_id: conversationId,
+        category: selectedCategory,
+        sub_issue: selectedSubIssue,
+        messages: messages,
+        order_id: orderId
+      });
+
+      const botMessage = {
+        id: Date.now() + 1,
+        text: response.data.response || 'I apologize, but I encountered an error processing your request. Please try again.',
+        sender: 'bot',
+        timestamp: new Date(),
+        requiresImage: response.data.requires_image || false,
+        imageRequest: response.data.image_request || null
+      };
+
+      setMessages(prev => [...prev, botMessage]);
+    } catch (error) {
+      console.error('Error sending message:', error);
+      const errorMessage = {
+        id: Date.now() + 1,
+        text: 'Sorry, I encountered an error. Please try again or contact support if the issue persists.',
+        sender: 'bot',
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    }
+    setLoading(false);
+  };
+
+  // Component for rendering missing items selection interface
+  const MissingItemsSelector = ({ message }) => {
+    const [selectedItems, setSelectedItems] = useState([]);
+    const [items, setItems] = useState([]);
+    const [orderInfo, setOrderInfo] = useState({});
+
+    useEffect(() => {
+      if (isMissingItemsSelection(message.text)) {
+        const parsedItems = parseMissingItemsOptions(message.text);
+        setItems(parsedItems);
+
+        // Extract order info from the text
+        const orderMatch = message.text.match(/Your Order:\*\* ([^\s]+) from (.+)/);
+        if (orderMatch) {
+          setOrderInfo({
+            orderId: orderMatch[1],
+            restaurant: orderMatch[2].split('\n')[0].trim()
+          });
+        }
+      }
+    }, [message.text]);
+
+    const toggleItemSelection = (itemIndex) => {
+      const item = items[itemIndex];
+      const isSelected = selectedItems.some(selected => selected.number === item.number);
+
+      if (isSelected) {
+        setSelectedItems(prev => prev.filter(selected => selected.number !== item.number));
+      } else {
+        setSelectedItems(prev => [...prev, item]);
+      }
+    };
+
+    const submitSelection = () => {
+      handleItemSelection(items, selectedItems);
+    };
+
+    if (!isMissingItemsSelection(message.text) || items.length === 0) {
+      return null;
+    }
+
+    return (
+      <div style={{ marginTop: '12px' }}>
+        {orderInfo.orderId && (
+          <div style={{
+            fontSize: '13px',
+            marginBottom: '12px',
+            padding: '8px',
+            backgroundColor: '#f8f9fa',
+            borderRadius: '6px',
+            color: '#666'
+          }}>
+            📋 <strong>Order {orderInfo.orderId}</strong> from {orderInfo.restaurant}
+          </div>
+        )}
+
+        <div style={{
+          fontSize: '14px',
+          fontWeight: 'bold',
+          marginBottom: '8px',
+          color: '#2196f3'
+        }}>
+          📝 Select Missing Items:
+        </div>
+
+        {items.map((item, index) => {
+          const isSelected = selectedItems.some(selected => selected.number === item.number);
+          return (
+            <div
+              key={item.number}
+              onClick={() => toggleItemSelection(index)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                padding: '8px 12px',
+                margin: '4px 0',
+                backgroundColor: isSelected ? '#e3f2fd' : '#f8f9fa',
+                border: `2px solid ${isSelected ? '#2196f3' : '#dee2e6'}`,
+                borderRadius: '6px',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              <div style={{
+                marginRight: '8px',
+                fontSize: '18px',
+                color: isSelected ? '#2196f3' : '#666'
+              }}>
+                {isSelected ? '✅' : '☐'}
+              </div>
+              <div style={{
+                flex: 1,
+                fontSize: '14px',
+                color: isSelected ? '#2196f3' : '#333'
+              }}>
+                {item.number}. {item.name}
+              </div>
+            </div>
+          );
+        })}
+
+        <div style={{
+          display: 'flex',
+          gap: '8px',
+          marginTop: '12px',
+          flexWrap: 'wrap'
+        }}>
+          <button
+            onClick={submitSelection}
+            style={{
+              background: selectedItems.length > 0 ? '#dc3545' : '#28a745',
+              color: 'white',
+              border: 'none',
+              padding: '8px 16px',
+              borderRadius: '4px',
+              fontSize: '12px',
+              cursor: 'pointer',
+              fontWeight: 'bold'
+            }}
+          >
+            {selectedItems.length > 0
+              ? `🚨 Report ${selectedItems.length} Missing Item${selectedItems.length > 1 ? 's' : ''}`
+              : '✅ All Items Present'
+            }
+          </button>
+
+          {selectedItems.length > 0 && (
+            <button
+              onClick={() => setSelectedItems([])}
+              style={{
+                background: '#6c757d',
+                color: 'white',
+                border: 'none',
+                padding: '8px 16px',
+                borderRadius: '4px',
+                fontSize: '12px',
+                cursor: 'pointer'
+              }}
+            >
+              Clear Selection
+            </button>
+          )}
+        </div>
+
+        {selectedItems.length > 0 && (
+          <div style={{
+            marginTop: '8px',
+            padding: '8px',
+            backgroundColor: '#fff3cd',
+            border: '1px solid #ffeaa7',
+            borderRadius: '4px',
+            fontSize: '12px'
+          }}>
+            <strong>Selected:</strong> {selectedItems.map(item => item.name).join(', ')}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="App">
       <AnimatedBackground />
@@ -284,28 +566,43 @@ const ChatBot = () => {
             {messages.map((message) => (
               <div key={message.id} className={`mobile-message ${message.sender}`}>
                 <div className={`mobile-message-bubble ${message.sender}`}>
-                  <div>
-                    {message.text.split(/(https?:\/\/[^\s]+)/g).map((part, index) => {
-                      if (part.match(/https?:\/\/[^\s]+/)) {
-                        return (
-                          <a 
-                            key={index} 
-                            href={part} 
-                            target="_blank" 
-                            rel="noopener noreferrer" 
-                            style={{ 
-                              color: '#007bff', 
-                              textDecoration: 'underline',
-                              fontWeight: 'bold'
-                            }}
-                          >
-                            {part}
-                          </a>
-                        );
-                      }
-                      return part;
-                    })}
-                  </div>
+                  {/* Only show text if it's NOT a missing items selection interface */}
+                  {!isMissingItemsSelection(message.text) && (
+                    <div>
+                      {message.text.split(/(https?:\/\/[^\s]+)/g).map((part, index) => {
+                        if (part.match(/https?:\/\/[^\s]+/)) {
+                          return (
+                            <a
+                              key={index}
+                              href={part}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{
+                                color: '#007bff',
+                                textDecoration: 'underline',
+                                fontWeight: 'bold'
+                              }}
+                            >
+                              {part}
+                            </a>
+                          );
+                        }
+                        return part;
+                      })}
+                    </div>
+                  )}
+
+                  {/* Show custom header for missing items selection */}
+                  {isMissingItemsSelection(message.text) && (
+                    <div style={{
+                      fontSize: '16px',
+                      fontWeight: 'bold',
+                      marginBottom: '12px',
+                      color: '#2196f3'
+                    }}>
+                      🔍 Select Missing Items from Your Order
+                    </div>
+                  )}
                   
                   {/* Category selection buttons */}
                   {message.showCategories && message.sender === 'bot' && (
@@ -354,7 +651,12 @@ const ChatBot = () => {
                       </div>
                     </div>
                   )}
-                  
+
+                  {/* Missing Items Interactive Selection */}
+                  {message.sender === 'bot' && isMissingItemsSelection(message.text) && (
+                    <MissingItemsSelector message={message} />
+                  )}
+
                   <div className="mobile-message-time">
                     {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </div>

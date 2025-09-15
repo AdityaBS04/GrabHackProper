@@ -692,6 +692,136 @@ def submit_complaint():
     
     return jsonify({'solution': solution, 'complaint_id': complaint_id})
 
+@app.route('/api/missing-items', methods=['POST'])
+def missing_items():
+    """Dedicated endpoint for missing items with interactive selection"""
+    data = request.json
+    username = data.get('username', 'anonymous')
+    order_id = data.get('order_id')
+    message = data.get('message', 'Missing items complaint')
+
+    print(f"DEBUG: Missing items endpoint called - username={username}, order_id={order_id}")
+
+    try:
+        # Get actual order data from database directly in Flask app
+        actual_order_data = get_actual_order_data_direct(username, order_id)
+        if not actual_order_data:
+            return jsonify({
+                'response': "❌ Unable to find your order details. Please provide your order ID or contact support.",
+                'requires_image': False,
+                'success': False
+            })
+
+        # Generate the interactive selection interface
+        response_text = generate_missing_items_selection_interface(actual_order_data)
+
+        print(f"DEBUG: Generated selection interface with {len(response_text)} characters")
+
+        return jsonify({
+            'response': response_text,
+            'requires_image': False,
+            'success': True
+        })
+
+    except Exception as e:
+        print(f"ERROR: Missing items handler failed: {e}")
+        import traceback
+        traceback.print_exc()
+
+        return jsonify({
+            'response': f"Sorry, I encountered an error processing your missing items request. Please try again or contact support. Error: {str(e)}",
+            'requires_image': False,
+            'success': False
+        })
+
+def get_actual_order_data_direct(username: str, order_id: str = None) -> dict:
+    """Get actual order data from database - Flask app version"""
+    try:
+        conn = sqlite3.connect(DATABASE_PATH)
+        cursor = conn.cursor()
+
+        # Get order data - use order_id if provided, otherwise get most recent
+        if order_id:
+            cursor.execute('''
+                SELECT id, food_items, restaurant_name, price, status, date
+                FROM orders
+                WHERE id = ? AND username = ? AND service = 'grab_food' AND user_type = 'customer'
+            ''', (order_id, username))
+        else:
+            cursor.execute('''
+                SELECT id, food_items, restaurant_name, price, status, date
+                FROM orders
+                WHERE username = ? AND service = 'grab_food' AND user_type = 'customer'
+                ORDER BY date DESC LIMIT 1
+            ''', (username,))
+
+        result = cursor.fetchone()
+        conn.close()
+
+        if not result:
+            return None
+
+        order_id, food_items, restaurant_name, price, status, date = result
+
+        # Parse food items into a list
+        if food_items:
+            # Split by common delimiters and clean up
+            items_list = []
+            for item in food_items.replace(',', '\n').replace(';', '\n').split('\n'):
+                item = item.strip()
+                if item:
+                    items_list.append(item)
+        else:
+            items_list = []
+
+        # Format items for display
+        formatted_items = '\n'.join([f"• {item}" for item in items_list])
+
+        return {
+            'order_id': order_id,
+            'food_items_list': items_list,
+            'formatted_items': formatted_items,
+            'restaurant_name': restaurant_name,
+            'price': price,
+            'status': status,
+            'date': date,
+            'total_items_count': len(items_list)
+        }
+
+    except Exception as e:
+        print(f"Error getting order data: {e}")
+        return None
+
+def generate_missing_items_selection_interface(actual_order_data: dict) -> str:
+    """Generate interactive missing items selection interface"""
+    order_id = actual_order_data['order_id']
+    restaurant = actual_order_data['restaurant_name']
+    items_list = actual_order_data['food_items_list']
+
+    # Create interactive selection format
+    items_with_checkboxes = []
+    for i, item in enumerate(items_list, 1):
+        items_with_checkboxes.append(f"☐ {i}. {item}")
+
+    return f"""🔍 **Missing Items Selection**
+
+**Your Order:** {order_id} from {restaurant}
+**Status:** {actual_order_data.get('status', 'completed')}
+
+**📝 Which items are missing from your order?**
+
+{chr(10).join(items_with_checkboxes)}
+
+**💡 How to select missing items:**
+- **"Items 1 and 3 are missing"** - Select by numbers
+- **"I didn't receive the {items_list[0] if items_list else 'first item'}"** - Select by name
+- **"Missing items 2, 4, and 5"** - Multiple items
+- **"All items are present"** - Nothing missing
+
+**📷 Tip:** Upload a photo for AI-assisted selection!
+
+**Select your missing items above and I'll process your refund immediately!**"""
+
 # Store conversation sessions in memory (in production, use a proper database)
 conversation_sessions = {}
 
@@ -821,6 +951,7 @@ def get_user_orders_context(username, service, user_type, specific_order_id=None
 @app.route('/api/chat', methods=['POST'])
 def chat():
     """Handle chatbot conversation"""
+    print("DEBUG: Chat endpoint called")
     data = request.json
     message = data.get('message', '').strip()
     service = data.get('service')
@@ -860,18 +991,49 @@ def chat():
         user_orders_context = get_user_orders_context(username, service, user_type, order_id)
         
         # If we have both category and sub_issue, use conversational AI processing
+        print(f"DEBUG: Chat request params - service={service}, user_type={user_type}, category={category}, sub_issue={sub_issue}")
         if category and sub_issue:
+            # Special handling for grab_food customer missing items (direct handler call for interactive selection)
+            print(f"DEBUG: Checking conditions - grab_food: {service == 'grab_food'}, customer: {user_type == 'customer'}, handle_missing_items: {sub_issue == 'handle_missing_items'}")
+            if (service == 'grab_food' and user_type == 'customer' and
+                sub_issue == 'handle_missing_items'):
+
+                print(f"DEBUG: Direct missing items handler called - username={username}, order_id={order_id}")
+                try:
+                    from grab_food.customer.order_quality_handler import OrderQualityHandler
+                    handler = OrderQualityHandler()
+                    response_text = handler.handle_missing_items(
+                        query=message,
+                        image_data=None,  # Will be handled in image upload endpoint
+                        username=username,
+                        order_id=order_id
+                    )
+
+                    print(f"DEBUG: Handler response length: {len(response_text) if response_text else 0}")
+                    session['messages'].append({'role': 'assistant', 'content': response_text})
+
+                    return jsonify({
+                        'response': response_text,
+                        'requires_image': False,  # Our handler now handles image requests internally
+                        'conversation_id': conversation_id
+                    })
+                except Exception as e:
+                    print(f"Missing items handler call failed: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    # Fall through to AI engine processing
+
             # Special handling for grab_cabs driver navigation route issue (direct handler call)
-            if (service == 'grab_cabs' and user_type == 'driver' and 
+            if (service == 'grab_cabs' and user_type == 'driver' and
                 category == 'operational_problems' and sub_issue == 'handle_incorrect_navigation_route'):
-                
+
                 try:
                     from grab_cabs.driver.operational_problems import OperationalProblemsHandler
                     handler = OperationalProblemsHandler()
                     response_text = handler.handle_incorrect_navigation_route(message)
-                    
+
                     session['messages'].append({'role': 'assistant', 'content': response_text})
-                    
+
                     return jsonify({
                         'response': response_text,
                         'requires_image': False,
@@ -880,9 +1042,10 @@ def chat():
                 except Exception as e:
                     print(f"Handler call failed: {e}")
                     # Fall through to AI engine processing
-            
+
             from enhanced_ai_engine_fixed import EnhancedAgenticAIEngine
             ai_engine = EnhancedAgenticAIEngine()
+            print(f"DEBUG: Using AI engine for conversation - service={service}, sub_issue={sub_issue}")
             
             # Build conversation context from previous messages
             conversation_context = ""
@@ -987,8 +1150,34 @@ def chat_image():
         if session.get('sub_issue'):
             # Get the last user message for context
             user_messages = [msg['content'] for msg in session['messages'] if msg['role'] == 'user']
-            last_user_message = user_messages[-1] if user_messages else "Please help me with this issue"
-            
+            last_user_message = user_messages[-1] if user_messages else "Image uploaded for missing items analysis"
+
+            # Special handling for grab_food customer missing items with image
+            if (service == 'grab_food' and user_type == 'customer' and
+                session.get('sub_issue') == 'handle_missing_items'):
+
+                try:
+                    from grab_food.customer.order_quality_handler import OrderQualityHandler
+                    handler = OrderQualityHandler()
+                    response_text = handler.handle_missing_items(
+                        query=last_user_message,
+                        image_data=image_data,
+                        username=session.get('username', 'anonymous'),
+                        order_id=session.get('order_id')
+                    )
+
+                    session['messages'].append({'role': 'assistant', 'content': response_text})
+                    session['awaiting_image'] = False
+
+                    return jsonify({
+                        'response': response_text,
+                        'requires_image': False,
+                        'conversation_id': conversation_id
+                    })
+                except Exception as e:
+                    print(f"Missing items image handler failed: {e}")
+                    # Fall through to AI engine processing
+
             response_text = ai_engine.process_complaint(
                 function_name=session['sub_issue'],
                 user_query=last_user_message,
@@ -998,10 +1187,10 @@ def chat_image():
                 username=session.get('username', 'anonymous'),
                 order_id=session.get('order_id')
             )
-            
+
             session['messages'].append({'role': 'assistant', 'content': response_text})
             session['awaiting_image'] = False
-            
+
             return jsonify({
                 'response': response_text,
                 'requires_image': False,

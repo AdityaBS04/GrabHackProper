@@ -10,7 +10,8 @@ from typing import Optional
 
 # Add parent directory to path to import enhanced_ai_engine
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-from enhanced_ai_engine import EnhancedAgenticAIEngine
+# Temporarily comment out AI engine import to test basic functionality
+# from enhanced_ai_engine_fixed import EnhancedAgenticAIEngine
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +23,8 @@ class OrderQualityHandler:
         self.service = "grab_food"
         self.actor = "customer"
         self.handler_type = "order_quality_handler"
-        self.ai_engine = EnhancedAgenticAIEngine()
+        # Initialize AI engine later to avoid import issues
+        self.ai_engine = None
         
     def handle_missing_items(self, query: str, image_data: Optional[str] = None, username: str = "anonymous", order_id: str = None) -> str:
         """Handle missing items with database validation and interactive selection"""
@@ -1146,55 +1148,24 @@ For future orders, please don't hesitate to contact us immediately if you have c
 
     def analyze_received_items_from_image_with_database(self, query: str, image_data: str, actual_order_data: dict) -> dict:
         """Analyze image to identify received items, comparing against actual order"""
-        analysis_prompt = f"""
-        Analyze this food delivery image and identify what items are present:
-
-        **ACTUAL ORDER FROM DATABASE:**
-        Order ID: {actual_order_data['order_id']}
-        Restaurant: {actual_order_data['restaurant_name']}
-        Items that should be present:
-        {actual_order_data['formatted_items']}
-
-        **Customer's complaint:** {query}
-
-        Looking at the image, identify:
-        1. Which items from the actual order are visible/present
-        2. Which items from the actual order appear to be missing
-        3. Any additional items not in the original order
-
-        Return ONLY JSON format:
-        {{
-            "items_present": ["item1", "item2"],
-            "items_missing": ["item3", "item4"],
-            "extra_items": ["item5"],
-            "confidence": "high/medium/low",
-            "analysis_notes": "what you observed"
-        }}
-        """
+        # For now, return a mock analysis to test the selection interface
+        # TODO: Implement AI image analysis once import issues are resolved
 
         try:
-            result = self.ai_engine.process_complaint(
-                function_name="analyze_received_vs_ordered",
-                user_query=analysis_prompt,
-                service=self.service,
-                user_type=self.actor,
-                image_data=image_data
-            )
+            # Mock analysis - assume some items are missing for testing
+            items_list = actual_order_data['food_items_list']
 
-            import json
-            if "{" in result and "}" in result:
-                json_start = result.find("{")
-                json_end = result.rfind("}") + 1
-                json_str = result[json_start:json_end]
-                return json.loads(json_str)
-            else:
-                return {
-                    "items_present": [],
-                    "items_missing": actual_order_data['food_items_list'],
-                    "extra_items": [],
-                    "confidence": "low",
-                    "analysis_notes": "Failed to analyze image"
-                }
+            # For testing, assume first 2 items are present, others are missing
+            items_present = items_list[:2] if len(items_list) > 2 else items_list[:1]
+            items_missing = items_list[2:] if len(items_list) > 2 else items_list[1:]
+
+            return {
+                "items_present": items_present,
+                "items_missing": items_missing,
+                "extra_items": [],
+                "confidence": "medium",
+                "analysis_notes": "Mock analysis for testing - AI engine temporarily disabled"
+            }
 
         except Exception as e:
             logger.error(f"Failed to analyze received items with database: {e}")

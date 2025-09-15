@@ -6,7 +6,8 @@
       "Bash(python:*)",
       "Bash(dir:*)",
       "Bash(findstr:*)",
-      "Bash(sqlite3:*)"
+      "Bash(sqlite3:*)",
+      "Bash(tasklist:*)"
     ],
     "deny": [],
     "ask": []
