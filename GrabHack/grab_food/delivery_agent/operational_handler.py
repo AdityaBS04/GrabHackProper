@@ -906,10 +906,10 @@ class OperationalHandler:
     
     def generate_payment_response(self, decision: str, order_id: str, amount: float) -> str:
         """Generate appropriate response based on payment decision"""
-        
+
         if decision == "ACCEPT_CUSTOMER_CLAIM":
             return f"""PAYMENT VERIFICATION COMPLETED [APPROVED]
-            
+
 Order ID: {order_id}
 Decision: CUSTOMER CLAIM ACCEPTED
 
@@ -921,10 +921,10 @@ Actions taken:
 - No cash collection required from customer
 
 You can proceed with the delivery. Mark order as completed once delivered."""
-        
+
         elif decision == "REQUIRE_PAYMENT_PROOF":
             return f"""PAYMENT VERIFICATION REQUIRED [WARNING]
-            
+
 Order ID: {order_id}
 Decision: ADDITIONAL PROOF NEEDED
 
@@ -939,11 +939,11 @@ If customer provides valid proof: Deliver the order
 If customer cannot provide proof: Collect ${amount:.2f} as COD
 
 Contact support at 1800-GRAB-HELP if customer disputes."""
-        
+
         elif decision == "COLLECT_COD_PAYMENT":
             return f"""CASH COLLECTION REQUIRED [COD]
-            
-Order ID: {order_id}  
+
+Order ID: {order_id}
 Decision: COLLECT CASH ON DELIVERY
 
 System validation shows this order requires cash payment. Please collect ${amount:.2f} from the customer before delivery.
@@ -954,10 +954,10 @@ If customer insists they paid online:
 3. If customer refuses payment, contact support immediately
 
 Do NOT deliver without payment or valid proof. Your safety and company policy are priorities."""
-        
+
         else:  # ESCALATE_TO_FINANCE
             return f"""PAYMENT DISPUTE ESCALATION [URGENT]
-            
+
 Order ID: {order_id}
 Decision: ESCALATE TO FINANCE TEAM
 
@@ -978,6 +978,402 @@ Provide Finance team with:
 - Amount in dispute: ${amount:.2f}
 
 Stay at location until issue is resolved (max 15 minutes)."""
+
+    # ===== STRICT WORKFLOW METHODS FOR DELIVERY AGENTS =====
+
+    def handle_package_damage_strict(self, query: str, agent_id: str, image_data: str = None, order_id: str = None) -> str:
+        """Handle package damage with strict 7-step workflow - REQUIRES IMAGE"""
+        logger.info(f"Processing package damage complaint: {query[:100]}...")
+
+        # Step 1: Validate image requirement for damage verification
+        if not image_data:
+            return "📷 Please upload a photo of the damaged package so we can verify the condition and provide appropriate guidance."
+
+        # Step 2: Analyze package damage severity and cause
+        damage_analysis = self.analyze_package_damage_from_image(query, image_data)
+        logger.info(f"Damage analysis: {damage_analysis}")
+
+        # Step 3: Get actual order data from database
+        order_data = self.get_order_data_for_agent(order_id, agent_id) if order_id else None
+
+        # Step 4: Check agent credibility and damage complaint history
+        credibility_score = self.get_agent_credibility_score(agent_id)
+        damage_complaint_history = self.check_damage_complaint_history(agent_id)
+        logger.info(f"Agent credibility: {credibility_score}/10, History: {damage_complaint_history}")
+
+        # Step 5: Determine liability and responsibility
+        liability_assessment = self.assess_damage_liability(damage_analysis, credibility_score, agent_id)
+        logger.info(f"Liability assessment: {liability_assessment}")
+
+        # Step 6: Calculate compensation and performance protection
+        compensation_calculation = self.calculate_damage_compensation(liability_assessment, order_data, damage_analysis)
+        logger.info(f"Compensation: {compensation_calculation}")
+
+        # Step 7: Generate comprehensive response with next steps
+        response = self.generate_damage_response(liability_assessment, compensation_calculation, damage_analysis)
+        logger.info(f"Package damage response generated successfully")
+
+        return response
+
+    def analyze_package_damage_from_image(self, query: str, image_data: str) -> dict:
+        """Analyze package damage from image using AI (simulated)"""
+        # In real implementation, this would use image analysis
+        query_lower = query.lower()
+
+        analysis = {
+            "damage_type": "container_damage",
+            "severity": "moderate",
+            "cause": "handling_accident",
+            "food_safety_risk": "low",
+            "delivery_feasible": True,
+            "customer_acceptance_likely": False
+        }
+
+        # Analyze query for damage indicators
+        if any(word in query_lower for word in ['spilled', 'leaked', 'wet']):
+            analysis["damage_type"] = "content_spill"
+            analysis["severity"] = "severe"
+            analysis["food_safety_risk"] = "high"
+            analysis["delivery_feasible"] = False
+        elif any(word in query_lower for word in ['crushed', 'broken', 'smashed']):
+            analysis["damage_type"] = "container_damage"
+            analysis["severity"] = "moderate"
+        elif any(word in query_lower for word in ['torn', 'ripped', 'open']):
+            analysis["damage_type"] = "packaging_breach"
+            analysis["severity"] = "moderate"
+            analysis["food_safety_risk"] = "medium"
+
+        # Determine cause
+        if any(word in query_lower for word in ['dropped', 'fell', 'accident']):
+            analysis["cause"] = "handling_accident"
+        elif any(word in query_lower for word in ['restaurant', 'kitchen', 'received']):
+            analysis["cause"] = "restaurant_packaging"
+        else:
+            analysis["cause"] = "transport_damage"
+
+        return analysis
+
+    def get_order_data_for_agent(self, order_id: str, agent_id: str) -> dict:
+        """Get order data specific to delivery agent"""
+        import sqlite3
+        import os
+
+        try:
+            database_paths = [
+                'grabhack.db',
+                '../grabhack.db',
+                'GrabHack/grabhack.db',
+                os.path.join(os.path.dirname(__file__), '../../grabhack.db')
+            ]
+
+            db_path = None
+            for path in database_paths:
+                if os.path.exists(path):
+                    db_path = path
+                    break
+
+            if not db_path:
+                return None
+
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+
+            cursor.execute('''
+                SELECT id, food_items, price, restaurant_name, status, delivery_agent_id
+                FROM orders
+                WHERE id = ? AND delivery_agent_id = ? AND service = 'grab_food'
+            ''', (order_id, agent_id))
+
+            result = cursor.fetchone()
+            conn.close()
+
+            if result:
+                order_id_db, food_items, price, restaurant_name, status, delivery_agent_id = result
+                return {
+                    'order_id': order_id_db,
+                    'food_items': food_items,
+                    'price': price,
+                    'restaurant_name': restaurant_name,
+                    'status': status,
+                    'delivery_agent_id': delivery_agent_id
+                }
+
+        except Exception as e:
+            logger.error(f"Error getting order data: {e}")
+
+        return None
+
+    def get_agent_credibility_score(self, agent_id: str) -> int:
+        """Calculate agent credibility score"""
+        import sqlite3
+        import os
+
+        base_score = 7
+
+        if not agent_id or agent_id == "anonymous":
+            return max(1, base_score - 3)
+
+        try:
+            database_paths = [
+                'grabhack.db',
+                '../grabhack.db',
+                'GrabHack/grabhack.db',
+                os.path.join(os.path.dirname(__file__), '../../grabhack.db')
+            ]
+
+            db_path = None
+            for path in database_paths:
+                if os.path.exists(path):
+                    db_path = path
+                    break
+
+            if not db_path:
+                return self._get_simulated_agent_credibility_score(agent_id)
+
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+
+            # Get agent performance
+            cursor.execute('''
+                SELECT
+                    COUNT(*) as total_deliveries,
+                    COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_deliveries
+                FROM orders
+                WHERE delivery_agent_id = ? AND service = 'grab_food'
+                AND date >= date('now', '-30 days')
+            ''', (agent_id,))
+
+            result = cursor.fetchone()
+            if result:
+                total_deliveries, completed_deliveries = result
+
+                if total_deliveries > 0:
+                    completion_rate = completed_deliveries / total_deliveries
+
+                    if completion_rate >= 0.95:
+                        base_score += 2
+                    elif completion_rate >= 0.85:
+                        base_score += 1
+                    elif completion_rate < 0.70:
+                        base_score -= 2
+
+                    if total_deliveries >= 100:
+                        base_score += 2
+                    elif total_deliveries >= 50:
+                        base_score += 1
+
+            conn.close()
+
+        except Exception as e:
+            logger.error(f"Error calculating agent credibility: {e}")
+            return self._get_simulated_agent_credibility_score(agent_id)
+
+        return max(1, min(10, int(base_score)))
+
+    def _get_simulated_agent_credibility_score(self, agent_id: str) -> int:
+        """Fallback credibility scoring"""
+        base_score = 7
+
+        if "test" in agent_id.lower():
+            base_score -= 1
+        if len(agent_id) > 8:
+            base_score += 1
+
+        return max(1, min(10, base_score))
+
+    def check_damage_complaint_history(self, agent_id: str) -> str:
+        """Check agent's package damage complaint history"""
+        if agent_id == "anonymous":
+            return "NO_HISTORY_AVAILABLE"
+        elif "test" in agent_id.lower():
+            return "FREQUENT_DAMAGE_REPORTS"
+        else:
+            return "NORMAL_DAMAGE_PATTERN"
+
+    def assess_damage_liability(self, damage_analysis: dict, credibility_score: int, agent_id: str) -> dict:
+        """Assess liability for package damage"""
+        damage_type = damage_analysis.get("damage_type", "container_damage")
+        cause = damage_analysis.get("cause", "unknown")
+        severity = damage_analysis.get("severity", "moderate")
+
+        liability = {
+            "agent_liability": "partial",
+            "compensation_warranted": True,
+            "performance_protection": False,
+            "restaurant_responsibility": False
+        }
+
+        # Determine liability based on cause and agent credibility
+        if cause == "restaurant_packaging" and credibility_score >= 7:
+            liability["agent_liability"] = "none"
+            liability["restaurant_responsibility"] = True
+            liability["performance_protection"] = True
+        elif cause == "handling_accident" and credibility_score >= 8:
+            liability["agent_liability"] = "minimal"
+            liability["performance_protection"] = True
+        elif cause == "transport_damage" and severity == "severe":
+            liability["agent_liability"] = "full"
+            liability["compensation_warranted"] = False
+        elif credibility_score <= 4:
+            liability["agent_liability"] = "full"
+            liability["performance_protection"] = False
+
+        return liability
+
+    def calculate_damage_compensation(self, liability_assessment: dict, order_data: dict, damage_analysis: dict) -> dict:
+        """Calculate compensation for package damage"""
+        agent_liability = liability_assessment.get("agent_liability", "partial")
+        order_value = order_data.get('price', 25.0) if order_data else 25.0
+
+        compensation = {
+            "customer_refund": 0.0,
+            "agent_compensation": 0.0,
+            "restaurant_charge": 0.0,
+            "delivery_fee_retention": 0.0
+        }
+
+        if agent_liability == "none":
+            compensation["customer_refund"] = order_value
+            compensation["agent_compensation"] = 5.0  # Goodwill payment
+            compensation["delivery_fee_retention"] = 1.0
+        elif agent_liability == "minimal":
+            compensation["customer_refund"] = order_value * 0.8
+            compensation["agent_compensation"] = 3.0
+            compensation["delivery_fee_retention"] = 1.0
+        elif agent_liability == "partial":
+            compensation["customer_refund"] = order_value * 0.6
+            compensation["agent_compensation"] = 0.0
+            compensation["delivery_fee_retention"] = 0.5
+        else:  # full liability
+            compensation["customer_refund"] = order_value
+            compensation["agent_compensation"] = -order_value * 0.3  # Deduction
+            compensation["delivery_fee_retention"] = 0.0
+
+        return compensation
+
+    def generate_damage_response(self, liability_assessment: dict, compensation_calculation: dict, damage_analysis: dict) -> str:
+        """Generate comprehensive response for package damage"""
+        agent_liability = liability_assessment.get("agent_liability", "partial")
+        customer_refund = compensation_calculation.get("customer_refund", 0.0)
+        agent_compensation = compensation_calculation.get("agent_compensation", 0.0)
+
+        if agent_liability == "none":
+            return f"""📦 **Package Damage - Not Your Responsibility**
+
+**Damage Assessment Complete:**
+- Damage type: {damage_analysis.get('damage_type', 'container_damage')}
+- Cause: Restaurant packaging issue
+- Agent liability: None
+
+**✅ Resolution & Compensation:**
+💰 **Customer refund:** ${customer_refund:.2f} processed
+🎁 **Your compensation:** ${agent_compensation:.2f} for inconvenience
+📈 **Performance protection:** Fully applied
+🚫 **No negative impact** on your ratings
+
+**Next Steps:**
+1. Do not deliver the damaged order
+2. Return to restaurant if feasible
+3. Customer will receive full refund + replacement option
+4. Your earnings and ratings are fully protected
+
+**Restaurant Notification:**
+- Packaging quality issue reported
+- Immediate review of packaging procedures required
+- Future prevention measures implemented
+
+Your professionalism in reporting this issue is appreciated and protects both customer satisfaction and service quality."""
+
+        elif agent_liability == "minimal":
+            return f"""📦 **Package Damage - Minimal Responsibility**
+
+**Damage Assessment:**
+- Damage type: {damage_analysis.get('damage_type', 'container_damage')}
+- Cause: Minor handling issue during transport
+- Agent liability: Minimal
+
+**✅ Fair Resolution:**
+💰 **Customer refund:** ${customer_refund:.2f}
+🎁 **Your compensation:** ${agent_compensation:.2f} (goodwill payment)
+📈 **Performance protection:** Applied
+⚠️ **Minor guidance** for future handling
+
+**Learning Opportunity:**
+- Handle packages with extra care during transport
+- Use both hands for large/fragile orders
+- Secure items properly in delivery bag
+- Check package condition before pickup
+
+**Support Provided:**
+- Delivery handling training resources available
+- Equipment upgrade options if needed
+- Performance metrics protected for this incident
+
+Accidents happen, and your honest reporting helps us improve service quality for everyone."""
+
+        elif agent_liability == "partial":
+            return f"""📦 **Package Damage - Shared Responsibility**
+
+**Damage Assessment:**
+- Damage type: {damage_analysis.get('damage_type', 'container_damage')}
+- Cause: Handling during delivery process
+- Agent liability: Partial
+
+**⚖️ Balanced Resolution:**
+💰 **Customer refund:** ${customer_refund:.2f}
+📊 **Performance impact:** Minimal (extenuating circumstances considered)
+💼 **Delivery fee:** Partial retention (${compensation_calculation.get('delivery_fee_retention', 0):.2f})
+
+**Improvement Plan:**
+1. **Package Handling Review:**
+   - Best practices for fragile items
+   - Proper delivery bag usage
+   - Weather protection techniques
+
+2. **Prevention Measures:**
+   - Double-check package integrity at pickup
+   - Use insulated bags for temperature-sensitive items
+   - Report packaging concerns to restaurants proactively
+
+**Support Available:**
+- Delivery technique training modules
+- Equipment upgrade assistance
+- Mentorship program with experienced agents
+
+We understand that damage can occur despite best efforts. Learn from this experience to enhance your delivery success."""
+
+        else:  # full liability
+            return f"""📦 **Package Damage - Full Responsibility**
+
+**Damage Assessment:**
+- Damage type: {damage_analysis.get('damage_type', 'container_damage')}
+- Cause: Preventable handling issue
+- Agent liability: Full
+
+**⚠️ Serious Resolution Required:**
+💰 **Customer refund:** ${customer_refund:.2f} (full order value)
+📉 **Performance impact:** Significant
+💸 **Agent responsibility:** ${abs(agent_compensation):.2f} order value deduction
+🚫 **Delivery fee:** Forfeited
+
+**Immediate Requirements:**
+1. **Mandatory Training:**
+   - Package handling certification required
+   - Food safety protocols review
+   - Customer service excellence modules
+
+2. **Probationary Measures:**
+   - Enhanced supervision for next 20 deliveries
+   - Quality check requirements increased
+   - Performance monitoring intensified
+
+**Path to Improvement:**
+- Complete mandatory training within 48 hours
+- Demonstrate improved handling techniques
+- Maintain 95%+ customer satisfaction
+- Pass quality assessments consistently
+
+This incident represents a serious service failure. However, we believe in second chances with proper training and commitment to improvement. Your future success depends on learning from this experience."""
 
 
 # Example usage
