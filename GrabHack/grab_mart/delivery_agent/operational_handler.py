@@ -1,7 +1,7 @@
 """
-Operational Issues Handler for Grab Mart
-Consolidates: Package tampered/spilled, Wrong package, Payment collection (COD), 
-Customer unavailable, Long wait times, Late cancellations
+Grocery Delivery Operational Issues Handler for Grab Mart
+Handles: Package integrity issues, Wrong packages, COD payment issues,
+Customer availability issues, Wait times, Late cancellations for grocery delivery
 """
 
 import asyncio

@@ -1,303 +1,525 @@
 """
 Grab Mart Delivery Agent Grocery Delivery Handler
-Handles grocery delivery performance, product handling, and customer service
+Uses AI models for intelligent performance management
 """
 
 import logging
-from typing import Dict, Any
+import os
+import sys
+from typing import Optional
+
+# Add parent directory to path to import enhanced_ai_engine
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+from enhanced_ai_engine import EnhancedAgenticAIEngine
 
 logger = logging.getLogger(__name__)
 
 
 class GroceryDeliveryHandler:
-    """Grocery delivery agent performance and service management"""
-    
+    """Delivery agent-focused grocery delivery performance management with real AI"""
+
     def __init__(self, groq_api_key: str = None):
         self.service = "grab_mart"
         self.actor = "delivery_agent"
-        
-    def handle_grocery_handling_standards(self, query: str) -> str:
-        """Handle grocery delivery agent product handling and care"""
-        return """🛒 **Grocery Handling Excellence Standards**
+        self.handler_type = "grocery_delivery_handler"
+        self.ai_engine = EnhancedAgenticAIEngine()
 
-**Product Handling Performance Review**
+    def handle_grocery_handling_standards(self, query: str, image_data: Optional[str] = None, username: str = "anonymous") -> str:
+        """Handle grocery delivery agent product handling and care with strict 6-step workflow - TEXT ONLY"""
+        logger.info(f"Processing grocery handling standards issue: {query[:100]}...")
 
-**Handling Standards Violation:**
-- Customer reported damaged/crushed groceries
-- Proper handling protocol not followed
-- Immediate retraining required
-- Performance accountability measures applied
+        # Step 1: Extract specific handling issues and violations
+        handling_issue_details = self.extract_grocery_handling_issues(query)
+        logger.info(f"Handling issue details: {handling_issue_details}")
 
-**Mandatory Training Requirements:**
-1. Grocery handling best practices (45 minutes)
-2. Fragile item protection techniques
-3. Temperature-sensitive product management
-4. Customer satisfaction delivery standards
+        # Step 2: Assess severity and customer impact
+        impact_assessment = self.assess_handling_violation_impact(handling_issue_details)
+        logger.info(f"Impact assessment: {impact_assessment}")
 
-**Product Handling Protocol:**
-- Separate bags for different product types
-- Fragile items: top placement and cushioning
-- Cold chain products: insulated bag mandatory
-- Heavy items: bottom placement and weight distribution
+        # Step 3: Check delivery agent performance and violation history
+        agent_credibility_score = self.get_delivery_agent_performance_score(username)
+        handling_violation_history = self.check_handling_violation_history(username)
+        logger.info(f"Agent performance: {agent_credibility_score}/10, Violation history: {handling_violation_history}")
 
-**Delivery Equipment Standards:**
-- Insulated cooler bags for temperature control
-- Protective packaging materials
-- Proper grocery bag organization
-- Clean and sanitized delivery containers
+        # Step 4: Determine training requirements and corrective actions
+        training_requirements = self.determine_handling_training_requirements(handling_issue_details, impact_assessment, agent_credibility_score)
+        logger.info(f"Training requirements: {training_requirements}")
 
-**Quality Assurance Measures:**
-- Photo documentation of proper packing
-- Customer satisfaction verification
-- Temperature check for cold products
-- Delivery condition assessment
+        # Step 5: Make performance action decision
+        performance_action = self.decide_handling_performance_action(impact_assessment, agent_credibility_score, handling_violation_history)
+        logger.info(f"Performance action: {performance_action}")
 
-**Customer Service Excellence:**
-- Careful handling demonstration to customer
-- Professional delivery presentation
-- Grocery placement assistance offered
-- Customer satisfaction confirmation
+        # Step 6: Generate comprehensive response with training plan
+        response = self.generate_handling_standards_response(performance_action, training_requirements, handling_issue_details)
+        logger.info(f"Grocery handling standards response generated successfully")
 
-**Performance Monitoring:**
-- Next 20 deliveries monitored for handling quality
-- Customer feedback analysis and improvement
-- Photo evidence review for proper handling
-- Temperature control compliance verification
+        return response
 
-**Support and Resources:**
-- Proper handling technique videos
-- Equipment upgrade assistance program
-- Peer mentorship for best practices
-- Customer service training workshops
+    def handle_delivery_time_efficiency(self, query: str, image_data: Optional[str] = None, username: str = "anonymous") -> str:
+        """Handle grocery delivery time performance and route optimization with strict 5-step workflow - TEXT ONLY"""
+        logger.info(f"Processing delivery time efficiency issue: {query[:100]}...")
 
-Professional grocery handling ensures customer satisfaction and product integrity."""
+        # Step 1: Extract delivery time performance issues
+        time_performance_details = self.extract_delivery_time_issues(query)
+        logger.info(f"Time performance details: {time_performance_details}")
 
-    def handle_delivery_time_efficiency(self, query: str) -> str:
-        """Handle grocery delivery time performance and route optimization"""
-        return """⏰ **Grocery Delivery Time Optimization**
+        # Step 2: Analyze route efficiency and optimization opportunities
+        route_analysis = self.analyze_delivery_route_efficiency(time_performance_details, username)
+        logger.info(f"Route analysis: {route_analysis}")
 
-**Delivery Time Performance Enhancement**
+        # Step 3: Check delivery agent performance metrics and history
+        agent_performance_score = self.get_delivery_agent_performance_score(username)
+        time_performance_history = self.check_time_performance_history(username)
+        logger.info(f"Agent performance: {agent_performance_score}/10, Time history: {time_performance_history}")
 
-**Performance Analysis:**
-- Current average delivery time: 55 minutes
-- Target delivery time: 35-45 minutes
-- Multiple stop optimization required
-- Route efficiency improvement needed
+        # Step 4: Assess improvement potential and training needs
+        improvement_plan = self.assess_time_efficiency_improvement(time_performance_details, route_analysis, agent_performance_score)
+        logger.info(f"Improvement plan: {improvement_plan}")
 
-**Route Optimization Training:**
-1. Multi-stop delivery planning (30 minutes)
-2. Grocery-specific route strategies
-3. Traffic pattern recognition for grocery runs
-4. Time management techniques for bulk deliveries
+        # Step 5: Generate time efficiency enhancement response
+        response = self.generate_time_efficiency_response(improvement_plan, time_performance_details, query)
+        logger.info(f"Delivery time efficiency response generated successfully")
 
-**Efficiency Improvement Strategies:**
-- Batch delivery optimization techniques
-- Grocery load planning and organization
-- Customer communication for efficient handoff
-- Delivery zone familiarity enhancement
+        return response
 
-**Technology Utilization:**
-- Advanced GPS routing for grocery deliveries
-- Real-time traffic and parking information
-- Customer availability confirmation
-- Efficient loading and unloading techniques
+    def handle_customer_communication_grocery(self, query: str, image_data: Optional[str] = None, username: str = "anonymous") -> str:
+        """Handle grocery delivery customer communication and service with strict 6-step workflow - TEXT ONLY"""
+        logger.info(f"Processing customer communication issue: {query[:100]}...")
 
-**Performance Targets:**
-- Grocery delivery time: 35-45 minutes
-- Multiple order efficiency: <5 minutes per stop
-- Customer availability coordination
-- Zero delays due to poor planning
+        # Step 1: Extract specific communication failures and issues
+        communication_issues = self.extract_communication_failures(query)
+        logger.info(f"Communication issues: {communication_issues}")
 
-**Grocery-Specific Challenges:**
-- Heavy item handling and transport
-- Multiple bag organization and delivery
-- Apartment and complex navigation
-- Customer assistance and service
+        # Step 2: Assess customer impact and service quality
+        service_impact_assessment = self.assess_communication_service_impact(communication_issues)
+        logger.info(f"Service impact assessment: {service_impact_assessment}")
 
-**Incentive Programs:**
-- Efficiency bonus restoration
-- Peak grocery hours priority access
-- Customer satisfaction rewards
-- Time performance recognition
+        # Step 3: Check delivery agent communication performance history
+        agent_performance_score = self.get_delivery_agent_performance_score(username)
+        communication_history = self.check_communication_performance_history(username)
+        logger.info(f"Agent performance: {agent_performance_score}/10, Communication history: {communication_history}")
 
-**Monitoring and Support:**
-- GPS route analysis for next 15 deliveries
-- Customer satisfaction tracking
-- Time performance benchmarking
-- One-on-one coaching available
+        # Step 4: Determine communication training requirements
+        communication_training = self.determine_communication_training_needs(communication_issues, service_impact_assessment)
+        logger.info(f"Communication training: {communication_training}")
 
-Efficient grocery delivery creates customer convenience and satisfaction."""
+        # Step 5: Make service improvement decision
+        service_action = self.decide_communication_service_action(service_impact_assessment, agent_performance_score, communication_history)
+        logger.info(f"Service action: {service_action}")
 
-    def handle_customer_communication_grocery(self, query: str) -> str:
-        """Handle grocery delivery customer communication and service"""
-        return """📞 **Grocery Delivery Customer Communication Excellence**
+        # Step 6: Generate comprehensive communication improvement response
+        response = self.generate_communication_improvement_response(service_action, communication_training, communication_issues)
+        logger.info(f"Customer communication response generated successfully")
 
-**Customer Communication Standards for Grocery Delivery**
+        return response
 
-**Communication Enhancement Required:**
-- Grocery-specific customer interaction training
-- Product substitution communication improvement
-- Delivery coordination optimization
-- Professional service standard implementation
+    def handle_cold_chain_delivery(self, query: str, image_data: Optional[str] = None, username: str = "anonymous") -> str:
+        """Handle cold chain product delivery and temperature management with strict 7-step workflow - TEXT ONLY"""
+        logger.info(f"Processing cold chain delivery issue: {query[:100]}...")
 
-**Grocery Communication Protocol:**
-1. Pre-delivery confirmation call/message
-2. Product substitution approval process
-3. Delivery arrival notification
-4. Post-delivery service confirmation
+        # Step 1: Extract cold chain violation details
+        cold_chain_issues = self.extract_cold_chain_violations(query)
+        logger.info(f"Cold chain issues: {cold_chain_issues}")
 
-**Substitution Communication:**
-- Immediate customer contact for unavailable items
-- Clear alternatives presentation with pricing
-- Customer approval before substitution
-- Photo evidence of alternative products
+        # Step 2: Assess food safety and health impact
+        safety_impact = self.assess_cold_chain_safety_impact(cold_chain_issues)
+        logger.info(f"Safety impact: {safety_impact}")
 
-**Delivery Coordination:**
-- Estimated arrival time communication
-- Parking and access coordination
-- Elevator or stairs assistance planning
-- Special delivery instruction acknowledgment
+        # Step 3: Verify equipment compliance and protocol adherence
+        equipment_compliance = self.verify_cold_chain_equipment_compliance(cold_chain_issues, username)
+        logger.info(f"Equipment compliance: {equipment_compliance}")
 
-**Professional Service Standards:**
-- "Hello, this is [Name] delivering your Grab Mart order"
-- Clear communication about product conditions
-- Assistance offer for heavy or multiple items
-- "Thank you for choosing Grab Mart" closing
+        # Step 4: Check delivery agent cold chain performance history
+        agent_performance_score = self.get_delivery_agent_performance_score(username)
+        cold_chain_history = self.check_cold_chain_violation_history(username)
+        logger.info(f"Agent performance: {agent_performance_score}/10, Cold chain history: {cold_chain_history}")
 
-**Customer Assistance Protocol:**
-- Offer to carry groceries to desired location
-- Help with elderly or mobility-challenged customers
-- Proper placement of refrigerated items
-- Receipt and order verification assistance
+        # Step 5: Determine immediate corrective actions
+        corrective_actions = self.determine_cold_chain_corrective_actions(safety_impact, equipment_compliance, agent_performance_score)
+        logger.info(f"Corrective actions: {corrective_actions}")
 
-**Problem Resolution Communication:**
-- Immediate notification of any issues
-- Clear explanation of resolution steps
-- Customer satisfaction priority focus
-- Escalation to support when necessary
+        # Step 6: Plan mandatory training and equipment upgrades
+        training_plan = self.plan_cold_chain_training_and_equipment(cold_chain_issues, corrective_actions)
+        logger.info(f"Training plan: {training_plan}")
 
-**Technology Integration:**
-- In-app messaging for substitutions
-- Photo sharing for product verification
-- Real-time delivery tracking updates
-- Customer preference notation and memory
+        # Step 7: Generate cold chain compliance response
+        response = self.generate_cold_chain_compliance_response(corrective_actions, training_plan, safety_impact)
+        logger.info(f"Cold chain delivery response generated successfully")
 
-Excellence in grocery communication enhances customer trust and satisfaction."""
+        return response
 
-    def handle_cold_chain_delivery(self, query: str) -> str:
-        """Handle cold chain product delivery and temperature management"""
-        return """❄️ **Cold Chain Grocery Delivery Protocol**
+    def handle_bulk_order_delivery(self, query: str, image_data: Optional[str] = None, username: str = "anonymous") -> str:
+        """Handle bulk grocery order delivery and management with strict 5-step workflow - TEXT ONLY"""
+        logger.info(f"Processing bulk order delivery issue: {query[:100]}...")
 
-**Temperature Control Performance Review**
+        # Step 1: Extract bulk delivery performance issues
+        bulk_delivery_issues = self.extract_bulk_delivery_problems(query)
+        logger.info(f"Bulk delivery issues: {bulk_delivery_issues}")
 
-**Cold Chain Compliance Issue:**
-- Customer received warm/thawed products
-- Temperature maintenance protocol violation
-- Immediate corrective action required
-- Product safety priority activation
+        # Step 2: Analyze delivery efficiency and organization challenges
+        efficiency_analysis = self.analyze_bulk_delivery_efficiency(bulk_delivery_issues, username)
+        logger.info(f"Efficiency analysis: {efficiency_analysis}")
 
-**Mandatory Cold Chain Training:**
-1. Temperature-sensitive product identification (20 minutes)
-2. Proper insulated bag usage and management
-3. Delivery time optimization for cold products
-4. Customer education on product handling
+        # Step 3: Check delivery agent bulk handling performance
+        agent_performance_score = self.get_delivery_agent_performance_score(username)
+        bulk_delivery_history = self.check_bulk_delivery_performance_history(username)
+        logger.info(f"Agent performance: {agent_performance_score}/10, Bulk history: {bulk_delivery_history}")
 
-**Temperature Control Requirements:**
-- Insulated bags mandatory for all cold products
-- Ice packs usage for extended delivery times
-- Separate compartments for frozen vs refrigerated
-- Temperature monitoring and documentation
+        # Step 4: Determine equipment and process improvements
+        improvement_recommendations = self.determine_bulk_delivery_improvements(bulk_delivery_issues, efficiency_analysis, agent_performance_score)
+        logger.info(f"Improvement recommendations: {improvement_recommendations}")
 
-**Cold Product Categories:**
-- Frozen foods: maintain -18°C or below
-- Fresh produce: 0-4°C temperature range
-- Dairy products: continuous refrigeration required
-- Ice cream/frozen desserts: immediate delivery priority
+        # Step 5: Generate bulk delivery enhancement response
+        response = self.generate_bulk_delivery_enhancement_response(improvement_recommendations, bulk_delivery_issues, query)
+        logger.info(f"Bulk order delivery response generated successfully")
 
-**Equipment Standards:**
-- Professional-grade insulated delivery bags
-- Temperature monitoring devices
-- Ice pack inventory and rotation
-- Cooling gel pack backup system
+        return response
 
-**Delivery Time Optimization:**
-- Cold products prioritized in delivery sequence
-- Maximum delivery time limits for temperature-sensitive items
-- Customer availability confirmation for cold products
-- Alternative delivery options for extended delays
+    # ===== SUPPORTING METHODS FOR STRICT WORKFLOWS =====
 
-**Customer Education:**
-- Proper storage instruction communication
-- Temperature-sensitive product identification
-- Immediate refrigeration importance
-- Product quality guarantee explanation
+    def get_delivery_agent_performance_score(self, username: str) -> int:
+        """Calculate delivery agent performance score based on actual database history"""
+        import sqlite3
+        import os
+        from datetime import datetime, timedelta
 
-**Performance Monitoring:**
-- Temperature compliance verification next 20 deliveries
-- Customer satisfaction tracking for cold products
-- Equipment functionality checks
-- Cold chain protocol adherence assessment
+        base_score = 7  # Start with neutral-high performance
 
-Cold chain integrity is critical for product safety and customer health."""
+        # Handle anonymous users
+        if not username or username == "anonymous":
+            return max(1, base_score - 2)
 
-    def handle_bulk_order_delivery(self, query: str) -> str:
-        """Handle bulk grocery order delivery and management"""
-        return """📦 **Bulk Grocery Order Delivery Management**
+        try:
+            # Find database path
+            database_paths = [
+                'grabhack.db',
+                '../grabhack.db',
+                'GrabHack/grabhack.db',
+                os.path.join(os.path.dirname(__file__), '../../grabhack.db')
+            ]
 
-**Bulk Order Delivery Performance Enhancement**
+            db_path = None
+            for path in database_paths:
+                if os.path.exists(path):
+                    db_path = path
+                    break
 
-**Bulk Delivery Challenge:**
-- Large order volume management
-- Customer complained about delivery organization
-- Bulk handling protocol improvement required
-- Efficiency and presentation enhancement needed
+            if not db_path:
+                # Fallback to simulated scoring if no database
+                return self._get_simulated_performance_score(username)
 
-**Bulk Order Protocol:**
-1. Order review and preparation planning (10 minutes)
-2. Systematic loading and organization
-3. Customer communication for bulk delivery coordination
-4. Efficient unloading and placement assistance
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
 
-**Organization Strategies:**
-- Product category separation (frozen, refrigerated, pantry)
-- Heavy items first, fragile items last
-- Customer priority items identification
-- Logical grouping for customer convenience
+            # Get delivery agent's performance data
+            cursor.execute('''
+                SELECT
+                    COUNT(*) as total_deliveries,
+                    COUNT(CASE WHEN status = 'completed' THEN 1 END) as successful_deliveries,
+                    AVG(delivery_time_minutes) as avg_delivery_time,
+                    AVG(customer_rating) as avg_rating
+                FROM deliveries
+                WHERE delivery_agent_username = ? AND service = 'grab_mart'
+                AND delivery_date >= datetime('now', '-30 days')
+            ''', (username,))
 
-**Customer Coordination:**
-- Pre-delivery call for bulk order preparation
-- Parking and access arrangement
-- Delivery location discussion and confirmation
-- Time estimation and flexibility communication
+            result = cursor.fetchone()
+            if result:
+                total_deliveries, successful_deliveries, avg_delivery_time, avg_rating = result
 
-**Physical Handling Requirements:**
-- Proper lifting techniques for heavy items
-- Multiple trip planning and execution
-- Customer assistance and cooperation
-- Professional presentation and organization
+                # Calculate performance based on actual data
+                if total_deliveries > 0:
+                    success_rate = successful_deliveries / total_deliveries
 
-**Equipment and Tools:**
-- Bulk delivery cart or trolley usage
-- Multiple insulated bags for temperature control
-- Organizational containers and separators
-- Heavy-duty bags and reinforcement materials
+                    # Adjust score based on success rate
+                    if success_rate >= 0.95:
+                        base_score += 2
+                    elif success_rate >= 0.85:
+                        base_score += 1
+                    elif success_rate < 0.75:
+                        base_score -= 2
 
-**Customer Service Excellence:**
-- Bulk order confirmation and verification
-- Organized presentation for customer inspection
-- Assistance with storage and placement
-- Customer satisfaction verification before departure
+                    # Adjust based on delivery time (faster is better for groceries)
+                    if avg_delivery_time and avg_delivery_time <= 35:
+                        base_score += 1
+                    elif avg_delivery_time and avg_delivery_time > 60:
+                        base_score -= 1
 
-**Efficiency Metrics:**
-- Bulk order delivery time optimization
-- Customer satisfaction for large orders
-- Organization and presentation quality
-- Zero damage or missing items
+                    # Adjust based on customer ratings
+                    if avg_rating and avg_rating >= 4.5:
+                        base_score += 2
+                    elif avg_rating and avg_rating >= 4.0:
+                        base_score += 1
+                    elif avg_rating and avg_rating < 3.5:
+                        base_score -= 2
 
-**Support Resources:**
-- Bulk delivery best practices training
-- Equipment upgrade assistance program
-- Physical handling safety training
-- Customer service excellence workshops
+                    # Volume bonus for active agents
+                    if total_deliveries >= 100:
+                        base_score += 1
+                    elif total_deliveries >= 50:
+                        base_score += 0.5
 
-Bulk delivery excellence creates customer loyalty and operational efficiency."""
+            # Check for recent complaints
+            cursor.execute('''
+                SELECT COUNT(*)
+                FROM complaints
+                WHERE delivery_agent_username = ? AND service = 'grab_mart'
+                AND created_at >= datetime('now', '-30 days')
+            ''', (username,))
+
+            recent_complaints = cursor.fetchone()[0] if cursor.fetchone() else 0
+            if recent_complaints > 3:
+                base_score -= 2
+            elif recent_complaints > 1:
+                base_score -= 1
+
+            conn.close()
+
+        except Exception as e:
+            logger.error(f"Error calculating performance score: {e}")
+            # Fallback to simulated scoring
+            return self._get_simulated_performance_score(username)
+
+        # Ensure score is between 1-10
+        final_score = max(1, min(10, int(base_score)))
+
+        return final_score
+
+    def _get_simulated_performance_score(self, username: str) -> int:
+        """Fallback simulated performance scoring when database is unavailable"""
+        base_score = 7
+
+        if "test" in username.lower():
+            base_score -= 1
+
+        if len(username) > 8:
+            base_score += 1
+
+        return max(1, min(10, base_score))
+
+    # ===== GROCERY HANDLING STANDARDS WORKFLOW METHODS =====
+
+    def extract_grocery_handling_issues(self, query: str) -> str:
+        return self.ai_engine.process_complaint(
+            function_name="extract_grocery_handling_issues",
+            user_query=query,
+            service=self.service,
+            user_type=self.actor
+        )
+
+    def assess_handling_violation_impact(self, handling_issues: str) -> str:
+        return self.ai_engine.process_complaint(
+            function_name="assess_handling_violation_impact",
+            user_query=handling_issues,
+            service=self.service,
+            user_type=self.actor
+        )
+
+    def check_handling_violation_history(self, username: str) -> str:
+        if username == "anonymous":
+            return "NO_HISTORY_AVAILABLE"
+        elif "test" in username.lower():
+            return "FREQUENT_HANDLING_VIOLATIONS"
+        else:
+            return "OCCASIONAL_HANDLING_ISSUES"
+
+    def determine_handling_training_requirements(self, handling_issues: str, impact_assessment: str, performance_score: int) -> str:
+        return self.ai_engine.process_complaint(
+            function_name="determine_handling_training_requirements",
+            user_query=f"Issues: {handling_issues} | Impact: {impact_assessment} | Performance: {performance_score}",
+            service=self.service,
+            user_type=self.actor
+        )
+
+    def decide_handling_performance_action(self, impact_assessment: str, performance_score: int, violation_history: str) -> str:
+        return self.ai_engine.process_complaint(
+            function_name="decide_handling_performance_action",
+            user_query=f"Impact: {impact_assessment} | Performance: {performance_score} | History: {violation_history}",
+            service=self.service,
+            user_type=self.actor
+        )
+
+    def generate_handling_standards_response(self, performance_action: str, training_requirements: str, handling_issues: str) -> str:
+        return self.ai_engine.process_complaint(
+            function_name="generate_handling_standards_response",
+            user_query=f"Action: {performance_action} | Training: {training_requirements} | Issues: {handling_issues}",
+            service=self.service,
+            user_type=self.actor
+        )
+
+    # ===== DELIVERY TIME EFFICIENCY WORKFLOW METHODS =====
+
+    def extract_delivery_time_issues(self, query: str) -> str:
+        return self.ai_engine.process_complaint(
+            function_name="extract_delivery_time_issues",
+            user_query=query,
+            service=self.service,
+            user_type=self.actor
+        )
+
+    def analyze_delivery_route_efficiency(self, time_issues: str, username: str) -> str:
+        return f"Route efficiency analysis for {username}: {time_issues}"
+
+    def check_time_performance_history(self, username: str) -> str:
+        if username == "anonymous":
+            return "NO_HISTORY_AVAILABLE"
+        elif "test" in username.lower():
+            return "CONSISTENT_TIME_DELAYS"
+        else:
+            return "AVERAGE_TIME_PERFORMANCE"
+
+    def assess_time_efficiency_improvement(self, time_issues: str, route_analysis: str, performance_score: int) -> str:
+        return self.ai_engine.process_complaint(
+            function_name="assess_time_efficiency_improvement",
+            user_query=f"Issues: {time_issues} | Route: {route_analysis} | Performance: {performance_score}",
+            service=self.service,
+            user_type=self.actor
+        )
+
+    def generate_time_efficiency_response(self, improvement_plan: str, time_issues: str, query: str) -> str:
+        return self.ai_engine.process_complaint(
+            function_name="generate_time_efficiency_response",
+            user_query=f"Plan: {improvement_plan} | Issues: {time_issues} | Original: {query}",
+            service=self.service,
+            user_type=self.actor
+        )
+
+    # ===== CUSTOMER COMMUNICATION WORKFLOW METHODS =====
+
+    def extract_communication_failures(self, query: str) -> str:
+        return self.ai_engine.process_complaint(
+            function_name="extract_communication_failures",
+            user_query=query,
+            service=self.service,
+            user_type=self.actor
+        )
+
+    def assess_communication_service_impact(self, communication_issues: str) -> str:
+        return self.ai_engine.process_complaint(
+            function_name="assess_communication_service_impact",
+            user_query=communication_issues,
+            service=self.service,
+            user_type=self.actor
+        )
+
+    def check_communication_performance_history(self, username: str) -> str:
+        if username == "anonymous":
+            return "NO_HISTORY_AVAILABLE"
+        elif "test" in username.lower():
+            return "FREQUENT_COMMUNICATION_ISSUES"
+        else:
+            return "GOOD_COMMUNICATION_SKILLS"
+
+    def determine_communication_training_needs(self, communication_issues: str, impact_assessment: str) -> str:
+        return self.ai_engine.process_complaint(
+            function_name="determine_communication_training_needs",
+            user_query=f"Issues: {communication_issues} | Impact: {impact_assessment}",
+            service=self.service,
+            user_type=self.actor
+        )
+
+    def decide_communication_service_action(self, impact_assessment: str, performance_score: int, communication_history: str) -> str:
+        return self.ai_engine.process_complaint(
+            function_name="decide_communication_service_action",
+            user_query=f"Impact: {impact_assessment} | Performance: {performance_score} | History: {communication_history}",
+            service=self.service,
+            user_type=self.actor
+        )
+
+    def generate_communication_improvement_response(self, service_action: str, training_plan: str, communication_issues: str) -> str:
+        return self.ai_engine.process_complaint(
+            function_name="generate_communication_improvement_response",
+            user_query=f"Action: {service_action} | Training: {training_plan} | Issues: {communication_issues}",
+            service=self.service,
+            user_type=self.actor
+        )
+
+    # ===== COLD CHAIN DELIVERY WORKFLOW METHODS =====
+
+    def extract_cold_chain_violations(self, query: str) -> str:
+        return self.ai_engine.process_complaint(
+            function_name="extract_cold_chain_violations",
+            user_query=query,
+            service=self.service,
+            user_type=self.actor
+        )
+
+    def assess_cold_chain_safety_impact(self, cold_chain_issues: str) -> str:
+        return self.ai_engine.process_complaint(
+            function_name="assess_cold_chain_safety_impact",
+            user_query=cold_chain_issues,
+            service=self.service,
+            user_type=self.actor
+        )
+
+    def verify_cold_chain_equipment_compliance(self, cold_chain_issues: str, username: str) -> str:
+        return f"Equipment compliance verification for {username}: {cold_chain_issues}"
+
+    def check_cold_chain_violation_history(self, username: str) -> str:
+        if username == "anonymous":
+            return "NO_HISTORY_AVAILABLE"
+        elif "test" in username.lower():
+            return "MULTIPLE_COLD_CHAIN_VIOLATIONS"
+        else:
+            return "GOOD_COLD_CHAIN_COMPLIANCE"
+
+    def determine_cold_chain_corrective_actions(self, safety_impact: str, equipment_compliance: str, performance_score: int) -> str:
+        return self.ai_engine.process_complaint(
+            function_name="determine_cold_chain_corrective_actions",
+            user_query=f"Safety: {safety_impact} | Equipment: {equipment_compliance} | Performance: {performance_score}",
+            service=self.service,
+            user_type=self.actor
+        )
+
+    def plan_cold_chain_training_and_equipment(self, cold_chain_issues: str, corrective_actions: str) -> str:
+        return self.ai_engine.process_complaint(
+            function_name="plan_cold_chain_training_and_equipment",
+            user_query=f"Issues: {cold_chain_issues} | Actions: {corrective_actions}",
+            service=self.service,
+            user_type=self.actor
+        )
+
+    def generate_cold_chain_compliance_response(self, corrective_actions: str, training_plan: str, safety_impact: str) -> str:
+        return self.ai_engine.process_complaint(
+            function_name="generate_cold_chain_compliance_response",
+            user_query=f"Actions: {corrective_actions} | Training: {training_plan} | Safety: {safety_impact}",
+            service=self.service,
+            user_type=self.actor
+        )
+
+    # ===== BULK ORDER DELIVERY WORKFLOW METHODS =====
+
+    def extract_bulk_delivery_problems(self, query: str) -> str:
+        return self.ai_engine.process_complaint(
+            function_name="extract_bulk_delivery_problems",
+            user_query=query,
+            service=self.service,
+            user_type=self.actor
+        )
+
+    def analyze_bulk_delivery_efficiency(self, bulk_issues: str, username: str) -> str:
+        return f"Bulk delivery efficiency analysis for {username}: {bulk_issues}"
+
+    def check_bulk_delivery_performance_history(self, username: str) -> str:
+        if username == "anonymous":
+            return "NO_HISTORY_AVAILABLE"
+        elif "test" in username.lower():
+            return "POOR_BULK_DELIVERY_PERFORMANCE"
+        else:
+            return "ADEQUATE_BULK_HANDLING"
+
+    def determine_bulk_delivery_improvements(self, bulk_issues: str, efficiency_analysis: str, performance_score: int) -> str:
+        return self.ai_engine.process_complaint(
+            function_name="determine_bulk_delivery_improvements",
+            user_query=f"Issues: {bulk_issues} | Efficiency: {efficiency_analysis} | Performance: {performance_score}",
+            service=self.service,
+            user_type=self.actor
+        )
+
+    def generate_bulk_delivery_enhancement_response(self, improvements: str, bulk_issues: str, query: str) -> str:
+        return self.ai_engine.process_complaint(
+            function_name="generate_bulk_delivery_enhancement_response",
+            user_query=f"Improvements: {improvements} | Issues: {bulk_issues} | Original: {query}",
+            service=self.service,
+            user_type=self.actor
+        )
