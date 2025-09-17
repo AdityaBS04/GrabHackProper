@@ -668,6 +668,413 @@ class TechnicalHandler:
         except Exception:
             return {"parsing_failed": True}
     
+    # ===== STRICT WORKFLOW METHODS =====
+
+    def get_agent_credibility_score(self, agent_id: str) -> int:
+        """Calculate agent credibility score based on performance history"""
+        import sqlite3
+        import os
+        from datetime import datetime, timedelta
+
+        base_score = 7  # Start with neutral-high credibility
+
+        # Handle anonymous or invalid agent IDs
+        if not agent_id or agent_id == "anonymous":
+            return max(1, base_score - 3)
+
+        try:
+            # Find database path
+            database_paths = [
+                'grabhack.db',
+                '../grabhack.db',
+                'GrabHack/grabhack.db',
+                os.path.join(os.path.dirname(__file__), '../../grabhack.db')
+            ]
+
+            db_path = None
+            for path in database_paths:
+                if os.path.exists(path):
+                    db_path = path
+                    break
+
+            if not db_path:
+                return self._get_simulated_agent_credibility_score(agent_id)
+
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+
+            # Get agent's performance from users table
+            cursor.execute('''
+                SELECT credibility_score
+                FROM users
+                WHERE username = ? AND user_type = 'delivery_agent'
+            ''', (agent_id,))
+
+            user_result = cursor.fetchone()
+            if user_result:
+                base_score = user_result[0]
+
+            # Get agent's delivery history
+            cursor.execute('''
+                SELECT
+                    COUNT(*) as total_deliveries,
+                    COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_deliveries,
+                    COUNT(CASE WHEN status = 'cancelled' THEN 1 END) as cancelled_deliveries,
+                    AVG(price) as avg_order_value
+                FROM orders
+                WHERE delivery_agent_id = ? AND service = 'grab_food'
+                AND date >= date('now', '-30 days')
+            ''', (agent_id,))
+
+            result = cursor.fetchone()
+            if result:
+                total_deliveries, completed_deliveries, cancelled_deliveries, avg_order_value = result
+
+                if total_deliveries > 0:
+                    completion_rate = completed_deliveries / total_deliveries
+
+                    # Adjust score based on completion rate
+                    if completion_rate >= 0.95:
+                        base_score += 2
+                    elif completion_rate >= 0.85:
+                        base_score += 1
+                    elif completion_rate < 0.70:
+                        base_score -= 2
+
+                    # Adjust based on delivery volume (experienced agent)
+                    if total_deliveries >= 100:
+                        base_score += 2
+                    elif total_deliveries >= 50:
+                        base_score += 1
+
+            # Check recent technical complaints
+            cursor.execute('''
+                SELECT COUNT(*)
+                FROM complaints
+                WHERE username = ? AND service = 'grab_food' AND user_type = 'delivery_agent'
+                AND complaint_type LIKE '%technical%'
+                AND created_at >= datetime('now', '-30 days')
+            ''', (agent_id,))
+
+            recent_tech_complaints = cursor.fetchone()[0] if cursor.fetchone() else 0
+            if recent_tech_complaints > 3:
+                base_score -= 2
+            elif recent_tech_complaints > 1:
+                base_score -= 1
+
+            conn.close()
+
+        except Exception as e:
+            logger.error(f"Error calculating agent credibility score: {e}")
+            return self._get_simulated_agent_credibility_score(agent_id)
+
+        return max(1, min(10, int(base_score)))
+
+    def _get_simulated_agent_credibility_score(self, agent_id: str) -> int:
+        """Fallback simulated credibility scoring"""
+        base_score = 7
+
+        if "test" in agent_id.lower():
+            base_score -= 1
+
+        if len(agent_id) > 8:
+            base_score += 1
+
+        return max(1, min(10, base_score))
+
+    def handle_app_crash_strict(self, query: str, agent_id: str, image_data: str = None) -> str:
+        """Handle app crashes with strict 6-step workflow"""
+        logger.info(f"Processing app crash complaint: {query[:100]}...")
+
+        # Step 1: Extract crash details and device information
+        crash_details = self.extract_crash_details(query)
+        if not crash_details["device_info"] and not crash_details["error_symptoms"]:
+            return "📱 To diagnose the app crash, please provide device information (phone model, Android/iOS version) and describe what was happening when the app crashed."
+
+        # Step 2: Validate crash against system logs and app version
+        system_validation = self.validate_crash_against_system_logs(crash_details, agent_id)
+        logger.info(f"System validation: {system_validation}")
+
+        # Step 3: Analyze crash severity and impact on deliveries
+        crash_analysis = self.analyze_crash_severity_and_impact(crash_details, system_validation)
+        logger.info(f"Crash analysis: {crash_analysis}")
+
+        # Step 4: Check agent credibility and technical complaint history
+        credibility_score = self.get_agent_credibility_score(agent_id)
+        tech_complaint_pattern = self.check_tech_complaint_history(agent_id)
+        logger.info(f"Agent credibility: {credibility_score}/10, Tech pattern: {tech_complaint_pattern}")
+
+        # Step 5: Determine resolution priority and compensation eligibility
+        resolution_priority = self.determine_crash_resolution_priority(crash_analysis, credibility_score, tech_complaint_pattern)
+        logger.info(f"Resolution priority: {resolution_priority}")
+
+        # Step 6: Generate technical support response with next steps
+        response = self.generate_crash_support_response(resolution_priority, crash_details, crash_analysis)
+        logger.info(f"App crash response generated successfully")
+
+        return response
+
+    def extract_crash_details(self, query: str) -> dict:
+        """Extract crash details from agent's report"""
+        import re
+
+        details = {
+            "device_info": "",
+            "error_symptoms": "",
+            "crash_frequency": "single",
+            "app_version": "",
+            "affected_orders": 0,
+            "data_loss": False
+        }
+
+        # Extract device information
+        device_patterns = [
+            r'(iphone|android|samsung|apple|ios|pixel)',
+            r'(version\s+[\d\.]+)',
+            r'(\d+\.\d+\.\d+)'
+        ]
+
+        query_lower = query.lower()
+        for pattern in device_patterns:
+            match = re.search(pattern, query_lower)
+            if match:
+                details["device_info"] += match.group(1) + " "
+
+        # Extract symptoms
+        symptom_keywords = ['crash', 'freeze', 'hang', 'stuck', 'error', 'black screen', 'restart']
+        found_symptoms = [keyword for keyword in symptom_keywords if keyword in query_lower]
+        details["error_symptoms"] = ", ".join(found_symptoms)
+
+        # Determine frequency
+        if any(word in query_lower for word in ['repeatedly', 'multiple times', 'constantly', 'always']):
+            details["crash_frequency"] = "frequent"
+        elif any(word in query_lower for word in ['sometimes', 'occasionally', 'few times']):
+            details["crash_frequency"] = "occasional"
+
+        # Check for data loss indicators
+        if any(word in query_lower for word in ['lost', 'missing', 'disappeared', 'deleted']):
+            details["data_loss"] = True
+
+        return details
+
+    def validate_crash_against_system_logs(self, crash_details: dict, agent_id: str) -> dict:
+        """Validate crash report against system logs and app telemetry"""
+        # In real implementation, this would query crash reporting systems
+
+        validation = {
+            "crash_logs_found": False,
+            "app_version_supported": True,
+            "device_compatibility": "compatible",
+            "system_outage_correlation": False,
+            "agent_specific_issue": False
+        }
+
+        # Simulate system validation based on details
+        if crash_details["crash_frequency"] == "frequent":
+            validation["crash_logs_found"] = True
+            validation["agent_specific_issue"] = True
+
+        device_info = crash_details.get("device_info", "").lower()
+        if "old" in device_info or any(old_version in device_info for old_version in ["android 6", "ios 12"]):
+            validation["device_compatibility"] = "marginal"
+            validation["app_version_supported"] = False
+
+        return validation
+
+    def analyze_crash_severity_and_impact(self, crash_details: dict, system_validation: dict) -> dict:
+        """Analyze crash severity and impact on delivery operations"""
+
+        severity = "LOW"
+        impact_level = "MINIMAL"
+
+        # Determine severity based on frequency and symptoms
+        if crash_details["crash_frequency"] == "frequent":
+            severity = "HIGH"
+            impact_level = "SEVERE"
+        elif crash_details["data_loss"]:
+            severity = "MEDIUM"
+            impact_level = "MODERATE"
+        elif "freeze" in crash_details.get("error_symptoms", ""):
+            severity = "MEDIUM"
+            impact_level = "MODERATE"
+
+        # Factor in system validation
+        if not system_validation["app_version_supported"]:
+            severity = "HIGH"
+        if system_validation["device_compatibility"] == "incompatible":
+            severity = "CRITICAL"
+            impact_level = "SEVERE"
+
+        return {
+            "severity": severity,
+            "impact_level": impact_level,
+            "delivery_disruption": severity in ["HIGH", "CRITICAL"],
+            "immediate_action_required": severity == "CRITICAL",
+            "compensation_warranted": impact_level in ["MODERATE", "SEVERE"]
+        }
+
+    def check_tech_complaint_history(self, agent_id: str) -> str:
+        """Check agent's technical complaint history"""
+        if agent_id == "anonymous":
+            return "NO_HISTORY_AVAILABLE"
+        elif "test" in agent_id.lower():
+            return "FREQUENT_TECH_ISSUES"
+        else:
+            return "NORMAL_TECH_PATTERN"
+
+    def determine_crash_resolution_priority(self, crash_analysis: dict, credibility_score: int, tech_pattern: str) -> str:
+        """Determine resolution priority based on analysis"""
+        severity = crash_analysis["severity"]
+        impact = crash_analysis["impact_level"]
+
+        if severity == "CRITICAL":
+            return "EMERGENCY_PRIORITY"
+        elif severity == "HIGH" and credibility_score >= 7:
+            return "HIGH_PRIORITY"
+        elif severity == "HIGH" and credibility_score < 7:
+            return "MEDIUM_PRIORITY_VERIFICATION"
+        elif tech_pattern == "FREQUENT_TECH_ISSUES":
+            return "PATTERN_INVESTIGATION"
+        else:
+            return "STANDARD_PRIORITY"
+
+    def generate_crash_support_response(self, resolution_priority: str, crash_details: dict, crash_analysis: dict) -> str:
+        """Generate comprehensive technical support response"""
+
+        if resolution_priority == "EMERGENCY_PRIORITY":
+            return f"""🚨 **EMERGENCY - Critical App Crash Support**
+
+**Issue Classification:** Critical system failure requiring immediate intervention
+
+**✅ Immediate Actions Taken:**
+- Emergency technical team notified
+- Backup device deployment authorized
+- Order reassignment protocols activated
+- Performance protection applied to your account
+
+**🔧 Emergency Resolution Steps:**
+1. **STOP using the current app immediately**
+2. Call Emergency Tech Support: 1800-GRAB-TECH
+3. Backup phone/device will be provided within 2 hours
+4. Alternative order assignment system activated
+
+**💰 Compensation & Protection:**
+- Lost delivery opportunities: Full compensation
+- Emergency device provision: No charge
+- Performance ratings: Fully protected
+- Technical downtime payment: Activated
+
+**⏰ Timeline:**
+- Emergency support contact: Within 15 minutes
+- Backup device deployment: 2 hours maximum
+- Full system restoration: Within 24 hours
+
+Reference ID: TECH-EMRG-{hash(str(crash_details)) % 10000:04d}
+
+Your safety and earning capability are our top priority during this critical technical issue."""
+
+        elif resolution_priority == "HIGH_PRIORITY":
+            return f"""🔧 **HIGH PRIORITY - App Crash Technical Support**
+
+**Issue Analysis Complete:**
+- Crash severity: {crash_analysis['severity']}
+- Delivery impact: {crash_analysis['impact_level']}
+- Device compatibility: Verified
+- System logs: Under review
+
+**✅ Priority Resolution Plan:**
+1. **App Recovery Protocol:**
+   - Force stop current app and clear cache
+   - Update to latest app version (3.3.2)
+   - Reset app data if necessary
+   - Re-sync account and order data
+
+2. **Device Optimization:**
+   - Storage cleanup: Free up 2GB+ space
+   - Background app management
+   - Network connectivity optimization
+   - Battery optimization settings
+
+**💰 Performance Protection:**
+- Delivery completion rates: Protected
+- Earnings during downtime: Compensated
+- Customer ratings: Technical issue buffer applied
+- Order assignment priority: Maintained
+
+**📞 Dedicated Support:**
+- Priority tech support line: 1800-GRAB-PRIORITY
+- Live chat technical assistance available
+- Screen sharing support if needed
+- Follow-up within 6 hours guaranteed
+
+**⏰ Expected Resolution:**
+- Basic functionality: 30 minutes
+- Full app stability: 2-4 hours
+- Performance monitoring: 48 hours
+
+Reference ID: TECH-HIGH-{hash(str(crash_details)) % 10000:04d}"""
+
+        elif resolution_priority == "PATTERN_INVESTIGATION":
+            return f"""📊 **Technical Pattern Investigation Required**
+
+We notice multiple technical issues on your account requiring specialized analysis.
+
+**Investigation Scope:**
+- Device compatibility assessment
+- App usage pattern analysis
+- Network connectivity evaluation
+- Account-specific issue identification
+
+**Next Steps:**
+👨‍💼 **Senior Technical Specialist** assigned to your case
+📊 Comprehensive device and app performance analysis
+📞 Direct consultation within 12 hours
+🎯 Customized technical solution development
+
+**Temporary Measures:**
+- Alternative order receipt methods activated
+- Extended technical issue protection
+- Priority support queue placement
+- Performance metric adjustments
+
+Reference ID: TECH-INV-{hash(str(crash_details)) % 10000:04d}
+
+We're committed to resolving recurring technical issues permanently."""
+
+        else:  # STANDARD_PRIORITY
+            return f"""📱 **Technical Support - App Crash Resolution**
+
+**Issue Assessment:**
+- Crash type: {crash_details.get('error_symptoms', 'General app malfunction')}
+- Frequency: {crash_details.get('crash_frequency', 'Single occurrence')}
+- Device impact: Manageable
+
+**🔧 Resolution Steps:**
+1. **Basic Recovery:**
+   - Restart your device completely
+   - Update app to latest version
+   - Clear app cache and data
+   - Test with a small order
+
+2. **If Issues Persist:**
+   - Check device storage (need 1GB+ free)
+   - Verify network connectivity
+   - Disable battery optimization for Grab app
+   - Restart app after each delivery
+
+**💡 Prevention Tips:**
+- Keep app updated automatically
+- Maintain 2GB+ free storage space
+- Close background apps regularly
+- Use WiFi when possible for better stability
+
+**Support Available:**
+- Technical help line: 1800-GRAB-HELP
+- Live chat support in app
+- Video tutorials: grab.com/agent-support
+
+Resolution typically completes within 2-4 hours with these steps."""
+
     # Fallback methods
     def _create_fallback_crash_diagnosis(self, context: TechnicalContext) -> Dict[str, Any]:
         """Create fallback diagnosis for app crashes"""
