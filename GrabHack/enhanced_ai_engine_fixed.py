@@ -25,9 +25,16 @@ class EnhancedAgenticAIEngine:
     """Enhanced AI Engine with image processing and security screening"""
     
     def __init__(self):
-        self.groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+        try:
+            self.groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+            self.client_available = True
+        except Exception as e:
+            logger.error(f"Failed to initialize Groq client: {e}")
+            self.groq_client = None
+            self.client_available = False
+
         self.text_model = "openai/gpt-oss-120b"  # For resolving issues
-        self.image_model = "meta-llama/llama-4-maverick-17b-128e-instruct"  # For image processing 
+        self.image_model = "meta-llama/llama-4-maverick-17b-128e-instruct"  # For image processing
         self.security_model = "meta-llama/llama-prompt-guard-2-86m"  # For security screening
         self.orchestrator_model = "llama-3.3-70b-versatile"  # For orchestration
         
@@ -51,13 +58,22 @@ class EnhancedAgenticAIEngine:
             'handle_wrong_order_prep': True,    # Photo of wrong prepared order
             'handle_food_safety_violation': True, # Photo of safety violations
             
-            # Grab Cabs Customer functions that need image proof
+            # Grab Cabs Customer functions - ALL support image upload
             'handle_driver_behavior_issues': True,  # Photo of misconduct
+            'handle_driver_harassment_personalized': True,  # Photo evidence of harassment
+            'handle_driver_harassment_complaint': True,  # Photo evidence of harassment
             'handle_vehicle_condition': True,       # Photo of dirty/damaged vehicle
             'handle_safety_concerns': True,         # Photo of safety issues
+            'handle_unsafe_driving_behavior': True,  # Photo of unsafe driving
+            'handle_vehicle_problems': True,        # Photo of vehicle condition/problems
+            'handle_accidents_during_ride': True,   # Photo of accident damage
+            'handle_app_booking_issues': True,      # Screenshots of app problems
+            'handle_cancellation_refund_policy_complications': True,  # Screenshots of policy issues
+            'handle_airport_booking_problems': True,  # Photos of missed flights/timing issues
             
             # Grab Cabs Driver functions that need image proof
             'handle_passenger_misconduct': True,    # Photo of passenger issues
+            'handle_passenger_harassment_personalized': True,  # Photo evidence of passenger harassment
             'handle_vehicle_damage': True,         # Photo of damage caused by passenger
             
             # Grab Mart Customer functions that need image proof
@@ -382,9 +398,14 @@ Is there anything else I can help you with regarding your current order?
                          user_type: str, image_data: Optional[str] = None, username: Optional[str] = None,
                          order_id: Optional[str] = None) -> str:
         """Main method to process complaint using appropriate AI model"""
-        
+
         try:
             print(f"DEBUG: process_complaint called with function_name={function_name}, service={service}, user_type={user_type}, username={username}")
+
+            # If Groq client is not available, return fallback response immediately
+            if not self.client_available:
+                logger.warning("Groq client not available, using fallback response")
+                return self._generate_fallback_response(function_name, user_query, service, user_type)
             
             # Step 1: Check order status for quality issues (for grab_food) or any post-delivery complaints (for all services)
             if user_type == 'customer':
@@ -489,7 +510,8 @@ Is there anything else I can help you with regarding your current order?
         - If genuine: "I understand your frustration. Let me help you resolve this..."
         - If suspicious: "I notice [concern]. Could you please clarify [specific question]?"
         - If fraud suspected: "I'd like to connect you with our specialized support team who can better assist you with this."
-        
+
+        IMPORTANT: Keep your response to exactly 6 sentences or fewer. Be concise but empathetic.
         Respond as if you're talking directly to the customer. Be helpful but also protective of the company's interests.
         """
         
@@ -509,7 +531,7 @@ Is there anything else I can help you with regarding your current order?
                 ],
                 model=self.image_model,
                 temperature=0.3,
-                max_tokens=1000
+                max_tokens=300
             )
             
             return self._clean_unicode_response(response.choices[0].message.content)
@@ -540,13 +562,14 @@ Is there anything else I can help you with regarding your current order?
         USER COMPLAINT: {user_query}
         
         Provide a comprehensive, personalized resolution that:
-        
+
         1. **Acknowledgment**: Show empathy and understanding
         2. **Immediate Actions**: Specific steps being taken now
         3. **Compensation**: Appropriate compensation for this specific issue
-        4. **Prevention**: Measures to prevent recurrence  
+        4. **Prevention**: Measures to prevent recurrence
         5. **Timeline**: Clear expectations for resolution
-        
+
+        IMPORTANT: Keep your response to exactly 6 sentences or fewer. Be concise but empathetic.
         Make it specific to this exact situation, not generic.
         """
         
@@ -555,7 +578,7 @@ Is there anything else I can help you with regarding your current order?
                 messages=[{"role": "user", "content": prompt}],
                 model=self.text_model,
                 temperature=0.3,
-                max_tokens=800
+                max_tokens=300
             )
             
             return self._clean_unicode_response(response.choices[0].message.content)

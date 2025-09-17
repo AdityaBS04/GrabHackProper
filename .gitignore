@@ -125,3 +125,65 @@ yarn-error.log*
 # Node.js cache files
 .cache/
 **/node_modules/.cache/
+
+# Additional security patterns
+**/secrets/
+**/private/
+*.secret
+*.private
+*_secret*
+*_private*
+*_key*
+*_token*
+
+# API Keys and tokens (various formats)
+GROQ_API_KEY*
+OPENAI_API_KEY*
+ANTHROPIC_API_KEY*
+*_API_KEY*
+*_TOKEN*
+*_SECRET*
+auth_token*
+access_token*
+refresh_token*
+
+# Claude Code settings (may contain sensitive data)
+.claude/settings.local.json
+**/.claude/settings.local.json
+
+# Database and data files
+*.sql
+*.dump
+backup_*
+*_backup*
+user_data/
+customer_data/
+complaint_data/
+
+# Certificates and keys
+*.crt
+*.cer
+*.p12
+*.pfx
+*.pkcs12
+*.jks
+*.keystore
+
+# Session and cache files
+sessions/
+.sessions/
+cache/
+.cache/
+*_session*
+*_cache*
+
+# Email and communication logs
+mail_logs/
+sms_logs/
+communication_logs/
+
+# Financial and PII data
+financial_data/
+personal_data/
+pii_data/
+payment_info/

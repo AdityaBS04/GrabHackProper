@@ -75,9 +75,36 @@ const ChatBot = () => {
     }
   };
 
+  // Function to parse and format LLM output with proper styling
+  const formatLLMResponse = (text) => {
+    if (!text) return text;
+
+    // Convert markdown-style formatting to HTML
+    let formatted = text
+      // Handle URLs first to preserve them
+      .replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer" style="color: #007bff; text-decoration: underline; font-weight: bold;">$1</a>')
+      // Bold text: **text** -> <strong>text</strong>
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      // Handle emoji headers and sections
+      .replace(/^(🚨|💰|✈️|🚗|🆘|📞|📝|📋|☐|✅)\s*\*\*(.*?)\*\*/gm, '<div class="section-header">$1 <strong>$2</strong></div>')
+      // Handle bullet points
+      .replace(/^- (.*$)/gm, '<div class="bullet-point">• $1</div>')
+      // Handle numbered lists
+      .replace(/^\d+\.\s+(.*$)/gm, '<div class="numbered-point">$&</div>')
+      // Handle checkbox items
+      .replace(/^☐\s+(.*$)/gm, '<div class="checkbox-item">☐ $1</div>')
+      // Handle checkmarks
+      .replace(/^✅\s+(.*$)/gm, '<div class="checkmark-item">✅ $1</div>')
+      // Convert line breaks to proper spacing
+      .replace(/\n\n/g, '<div class="paragraph-break"></div>')
+      .replace(/\n/g, '<br/>');
+
+    return formatted;
+  };
+
   const handleCategorySelect = async (categoryId, categoryName) => {
     setSelectedCategory(categoryId);
-    
+
     // Add user selection message
     const userMessage = {
       id: Date.now(),
@@ -86,12 +113,12 @@ const ChatBot = () => {
       timestamp: new Date()
     };
     setMessages(prev => [...prev, userMessage]);
-    
+
     setLoading(true);
     try {
       const response = await api.get(`/subissues/${service}/${userType}/${categoryId}`);
       setSubIssues(response.data.subissues || []);
-      
+
       const botMessage = {
         id: Date.now() + 1,
         text: 'Great! Now please select the specific issue you\'re experiencing:',
@@ -99,7 +126,7 @@ const ChatBot = () => {
         timestamp: new Date(),
         showSubIssues: true
       };
-      
+
       setMessages(prev => [...prev, botMessage]);
       setShowCategorySelection(false);
       setShowSubIssueSelection(true);
@@ -295,10 +322,43 @@ const ChatBot = () => {
 
   // Function to check if message contains missing items selection interface
   const isMissingItemsSelection = (text) => {
-    return text.includes('Which items are missing from your order?') ||
+    return (text.includes('Which items are missing from your order?') ||
            text.includes('Missing Items Selection') ||
-           text.includes('☐') ||
-           (text.includes('1.') && text.includes('2.') && text.includes('missing'));
+           (text.includes('1.') && text.includes('2.') && text.includes('missing'))) &&
+           !text.includes('Harassment Report') &&
+           !text.includes('Select Harassment Type') &&
+           !text.includes('Select Issue Type') &&
+           !text.includes('Airport Booking') &&
+           !text.includes('Cancellation/Refund');
+  };
+
+  // Function to check if message contains grab_cabs dropdown selection
+  const isGrabCabsDropdownSelection = (text) => {
+    return text.includes('📋 Select Harassment Type:') ||
+           text.includes('📋 Select Issue Type:') ||
+           text.includes('📋 Select Airport Issue Type:') ||
+           text.includes('📋 Select Policy Issue Type:') ||
+           text.includes('🚨 **Driver Harassment Report**') ||
+           text.includes('🚗 **App/Booking Issues Report**') ||
+           text.includes('✈️ **Airport Booking Problems**') ||
+           text.includes('💰 **Cancellation/Refund Policy Issues**');
+  };
+
+  // Function to parse grab_cabs dropdown options
+  const parseGrabCabsDropdownOptions = (text) => {
+    const lines = text.split('\n');
+    const options = [];
+
+    for (const line of lines) {
+      if (line.trim().startsWith('☐ ')) {
+        const option = line.trim().substring(2).trim();
+        if (option) {
+          options.push(option);
+        }
+      }
+    }
+
+    return options;
   };
 
   // Function to parse items from missing items selection message
@@ -547,6 +607,139 @@ const ChatBot = () => {
     );
   };
 
+  // Grab Cabs Dropdown Selector Component
+  const GrabCabsDropdownSelector = ({ message }) => {
+    const [selectedOption, setSelectedOption] = useState('');
+    const [options, setOptions] = useState([]);
+
+    useEffect(() => {
+      if (isGrabCabsDropdownSelection(message.text)) {
+        const parsedOptions = parseGrabCabsDropdownOptions(message.text);
+        setOptions(parsedOptions);
+      }
+    }, [message.text]);
+
+    const submitSelection = (option) => {
+      setSelectedOption(option);
+
+      // Send the selected option directly (this will add user message and call backend)
+      handleSendMessageDirect(option);
+    };
+
+    if (!isGrabCabsDropdownSelection(message.text) || options.length === 0) {
+      return null;
+    }
+
+    // Extract title from message
+    let title = 'Select an Option';
+    if (message.text.includes('Harassment Report')) {
+      title = '🚨 Select Harassment Type';
+    } else if (message.text.includes('App/Booking Issues')) {
+      title = '🚗 Select Issue Type';
+    } else if (message.text.includes('Airport Booking')) {
+      title = '✈️ Select Airport Issue Type';
+    } else if (message.text.includes('Cancellation/Refund')) {
+      title = '💰 Select Policy Issue Type';
+    }
+
+    return (
+      <div style={{ marginTop: '12px' }}>
+        <div style={{
+          fontSize: '16px',
+          fontWeight: '600',
+          marginBottom: '16px',
+          color: '#1e40af',
+          textAlign: 'center',
+          padding: '8px 12px',
+          backgroundColor: '#eff6ff',
+          borderRadius: '8px',
+          border: '1px solid #dbeafe'
+        }}>
+          {title}
+        </div>
+
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '10px',
+          width: '100%'
+        }}>
+          {options.map((option, index) => (
+            <button
+              key={index}
+              onClick={() => submitSelection(option)}
+              style={{
+                background: '#ffffff',
+                border: '2px solid #e0e7ff',
+                borderRadius: '12px',
+                padding: '14px 18px',
+                textAlign: 'left',
+                fontSize: '15px',
+                color: '#1e293b',
+                cursor: 'pointer',
+                transition: 'all 0.3s ease',
+                width: '100%',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+                fontWeight: '500',
+                lineHeight: '1.4',
+                minHeight: '52px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'flex-start',
+                WebkitTapHighlightColor: 'transparent',
+                userSelect: 'none'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.borderColor = '#3b82f6';
+                e.target.style.backgroundColor = '#f0f9ff';
+                e.target.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.15)';
+                e.target.style.transform = 'translateY(-1px)';
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.borderColor = '#e0e7ff';
+                e.target.style.backgroundColor = '#ffffff';
+                e.target.style.boxShadow = '0 2px 4px rgba(0,0,0,0.05)';
+                e.target.style.transform = 'translateY(0px)';
+              }}
+              onTouchStart={(e) => {
+                e.target.style.borderColor = '#3b82f6';
+                e.target.style.backgroundColor = '#f0f9ff';
+                e.target.style.transform = 'scale(0.98)';
+              }}
+              onTouchEnd={(e) => {
+                setTimeout(() => {
+                  e.target.style.borderColor = '#e0e7ff';
+                  e.target.style.backgroundColor = '#ffffff';
+                  e.target.style.transform = 'scale(1)';
+                }, 150);
+              }}
+            >
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                width: '100%'
+              }}>
+                <span style={{
+                  color: '#3b82f6',
+                  fontSize: '18px',
+                  minWidth: '18px',
+                  fontWeight: 'bold'
+                }}>☐</span>
+                <span style={{
+                  flex: 1,
+                  color: '#1e293b',
+                  fontSize: '15px',
+                  fontWeight: '500'
+                }}>{option}</span>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="App">
       <AnimatedBackground />
@@ -566,30 +759,15 @@ const ChatBot = () => {
             {messages.map((message) => (
               <div key={message.id} className={`mobile-message ${message.sender}`}>
                 <div className={`mobile-message-bubble ${message.sender}`}>
-                  {/* Only show text if it's NOT a missing items selection interface */}
-                  {!isMissingItemsSelection(message.text) && (
-                    <div>
-                      {message.text.split(/(https?:\/\/[^\s]+)/g).map((part, index) => {
-                        if (part.match(/https?:\/\/[^\s]+/)) {
-                          return (
-                            <a
-                              key={index}
-                              href={part}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              style={{
-                                color: '#007bff',
-                                textDecoration: 'underline',
-                                fontWeight: 'bold'
-                              }}
-                            >
-                              {part}
-                            </a>
-                          );
-                        }
-                        return part;
-                      })}
-                    </div>
+                  {/* Only show text if it's NOT a missing items or grab_cabs dropdown selection interface */}
+                  {!isMissingItemsSelection(message.text) && !isGrabCabsDropdownSelection(message.text) && (
+                    <div
+                      dangerouslySetInnerHTML={{ __html: formatLLMResponse(message.text) }}
+                      style={{
+                        lineHeight: '1.6',
+                        whiteSpace: 'pre-wrap'
+                      }}
+                    />
                   )}
 
                   {/* Show custom header for missing items selection */}
@@ -657,6 +835,11 @@ const ChatBot = () => {
                     <MissingItemsSelector message={message} />
                   )}
 
+                  {/* Grab Cabs Dropdown Interactive Selection */}
+                  {message.sender === 'bot' && isGrabCabsDropdownSelection(message.text) && (
+                    <GrabCabsDropdownSelector message={message} />
+                  )}
+
                   <div className="mobile-message-time">
                     {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </div>
@@ -693,5 +876,57 @@ const ChatBot = () => {
     </div>
   );
 };
+
+// Add styles for LLM response formatting
+const styles = `
+  .section-header {
+    font-size: 16px;
+    font-weight: bold;
+    margin: 12px 0 8px 0;
+    color: #2c3e50;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .bullet-point {
+    margin: 2px 0 2px 16px;
+    line-height: 1.3;
+  }
+
+  .numbered-point {
+    margin: 2px 0 2px 16px;
+    line-height: 1.3;
+  }
+
+  .checkbox-item {
+    margin: 6px 0;
+    padding: 8px 12px;
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    font-weight: 500;
+  }
+
+  .checkmark-item {
+    margin: 2px 0;
+    color: #28a745;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .paragraph-break {
+    height: 6px;
+  }
+`;
+
+// Inject styles
+if (typeof document !== 'undefined') {
+  const styleSheet = document.createElement("style");
+  styleSheet.innerText = styles;
+  document.head.appendChild(styleSheet);
+}
 
 export default ChatBot;

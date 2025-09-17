@@ -525,7 +525,11 @@ def get_categories(service, user_type):
             ]
         elif service_name == 'grab_cabs' and folder_name == 'customer':
             categories = [
-                {'id': 'ride_experience_handler', 'name': 'Ride Experience'}
+                {'id': 'ride_experience_handler', 'name': 'Ride Experience'},
+                {'id': 'driver_harassment', 'name': 'Driver Harassment & Safety'},
+                {'id': 'app_booking_issues', 'name': 'App/Booking Issues'},
+                {'id': 'cancellation_refund', 'name': 'Cancellation/Refund Policy'},
+                {'id': 'airport_problems', 'name': 'Airport Booking Problems'}
             ]
         elif service_name == 'grab_cabs' and folder_name == 'driver':
             categories = [
@@ -609,7 +613,36 @@ def get_subissues(service, user_type, category_id):
                 ]
             
             return jsonify({'subissues': sub_issues})
-        
+
+        # Special handling for grab_cabs customer issues
+        if service == 'grab_cabs' and user_type == 'customer':
+            sub_issues = []
+
+            if category_id == 'ride_experience_handler':
+                sub_issues = [
+                    {'id': 'handle_unsafe_driving_behavior', 'name': 'Unsafe Driving Behavior', 'description': 'Report rash driving, speeding, or dangerous behavior'},
+                    {'id': 'handle_vehicle_problems', 'name': 'Vehicle Condition Issues', 'description': 'Report dirty, damaged, or malfunctioning vehicles'},
+                    {'id': 'handle_accidents_during_ride', 'name': 'Accidents During Ride', 'description': 'Report accidents or damage that occurred during your trip'}
+                ]
+            elif category_id == 'driver_harassment':
+                sub_issues = [
+                    {'id': 'handle_driver_harassment_complaint', 'name': 'Driver Harassment/Rude Behavior', 'description': 'Report inappropriate driver behavior'}
+                ]
+            elif category_id == 'app_booking_issues':
+                sub_issues = [
+                    {'id': 'handle_app_booking_issues', 'name': 'App/Booking Technical Issues', 'description': 'Payment, tracking, or app malfunction problems'}
+                ]
+            elif category_id == 'cancellation_refund':
+                sub_issues = [
+                    {'id': 'handle_cancellation_refund_policy_complications', 'name': 'Cancellation/Refund Policy Issues', 'description': 'Issues with cancellation or refund policies'}
+                ]
+            elif category_id == 'airport_problems':
+                sub_issues = [
+                    {'id': 'handle_airport_booking_problems', 'name': 'Airport Booking Problems', 'description': 'Missed flights or incorrect sync issues'}
+                ]
+
+            return jsonify({'subissues': sub_issues})
+
         # Default handling for other services
         sub_issues = []
         
@@ -1043,6 +1076,370 @@ def chat():
                     print(f"Handler call failed: {e}")
                     # Fall through to AI engine processing
 
+            # Special handling for grab_cabs customer driver harassment (hybrid workflow)
+            if (service == 'grab_cabs' and user_type == 'customer' and
+                category == 'driver_harassment' and sub_issue == 'handle_driver_harassment_complaint'):
+
+                try:
+                    from grab_cabs.customer.customer_experience import CustomerExperienceHandler
+                    handler = CustomerExperienceHandler()
+
+                    # Determine workflow stage and harassment type
+                    harassment_type = None
+                    workflow_stage = "initial"
+
+                    # Check if this is a harassment type selection
+                    message_lower = message.lower()
+                    if 'threats' in message_lower:
+                        harassment_type = 'Threats'
+                        workflow_stage = "type_selected"
+                    elif 'verbal abuse' in message_lower:
+                        harassment_type = 'Verbal Abuse'
+                        workflow_stage = "type_selected"
+                    elif 'physical abuse' in message_lower:
+                        harassment_type = 'Physical Abuse'
+                        workflow_stage = "type_selected"
+                    elif 'stalking' in message_lower:
+                        harassment_type = 'Stalking'
+                        workflow_stage = "type_selected"
+                    elif 'inappropriate' in message_lower:
+                        harassment_type = 'Inappropriate Behaviour'
+                        workflow_stage = "type_selected"
+                    else:
+                        # Check if user already selected a type and is now providing description
+                        prev_messages = session.get('messages', [])
+                        for prev_msg in reversed(prev_messages):
+                            if prev_msg.get('role') == 'assistant' and 'harassment report -' in prev_msg.get('content', '').lower():
+                                # Extract harassment type from previous message
+                                content = prev_msg.get('content', '')
+                                if 'Threats' in content:
+                                    harassment_type = 'Threats'
+                                elif 'Verbal Abuse' in content:
+                                    harassment_type = 'Verbal Abuse'
+                                elif 'Physical Abuse' in content:
+                                    harassment_type = 'Physical Abuse'
+                                elif 'Stalking' in content:
+                                    harassment_type = 'Stalking'
+                                elif 'Inappropriate Behaviour' in content:
+                                    harassment_type = 'Inappropriate Behaviour'
+
+                                if harassment_type:
+                                    # Check if user wants to upload photo or said no evidence
+                                    if 'photo' in message.lower() or 'image' in message.lower() or 'evidence' in message.lower():
+                                        if 'no evidence' in message.lower():
+                                            workflow_stage = "ai_processing"
+                                        else:
+                                            workflow_stage = "image_request"
+                                    else:
+                                        # After text description, show image request
+                                        workflow_stage = "image_request"
+                                break
+
+                    response_text = handler.handle_driver_harassment_complaint(
+                        query=message,
+                        harassment_type=harassment_type,
+                        workflow_stage=workflow_stage
+                    )
+
+                    session['messages'].append({'role': 'assistant', 'content': response_text})
+
+                    # Store harassment_type in session for image processing
+                    if harassment_type:
+                        session['harassment_type'] = harassment_type
+
+                    # Set requires_image to True when showing image upload prompt
+                    requires_image = workflow_stage == "image_request"
+
+                    return jsonify({
+                        'response': response_text,
+                        'requires_image': requires_image,
+                        'conversation_id': conversation_id
+                    })
+                except Exception as e:
+                    print(f"Driver harassment handler call failed: {e}")
+                    # Fall through to AI engine processing
+
+            # Special handling for grab_cabs customer app/booking issues (hybrid workflow)
+            if (service == 'grab_cabs' and user_type == 'customer' and
+                category == 'app_booking_issues' and sub_issue == 'handle_app_booking_issues'):
+
+                try:
+                    from grab_cabs.customer.customer_experience import CustomerExperienceHandler
+                    handler = CustomerExperienceHandler()
+
+                    # Determine workflow stage and issue type
+                    issue_type = None
+                    workflow_stage = "initial"
+
+                    message_lower = message.lower()
+                    if 'payment problems' in message_lower:
+                        issue_type = 'Payment Problems'
+                        workflow_stage = "type_selected"
+                    elif 'app crashes' in message_lower or 'freezing' in message_lower:
+                        issue_type = 'App Crashes/Freezing'
+                        workflow_stage = "type_selected"
+                    elif 'gps' in message_lower or 'tracking' in message_lower:
+                        issue_type = 'GPS/Tracking Issues'
+                        workflow_stage = "type_selected"
+                    elif 'booking failed' in message_lower:
+                        issue_type = 'Booking Failed'
+                        workflow_stage = "type_selected"
+                    elif 'wrong fare' in message_lower or 'fare calculation' in message_lower:
+                        issue_type = 'Wrong Fare Calculation'
+                        workflow_stage = "type_selected"
+                    else:
+                        # Check if user already selected a type and is now providing description
+                        prev_messages = session.get('messages', [])
+                        for prev_msg in reversed(prev_messages):
+                            if prev_msg.get('role') == 'assistant' and 'app/booking issues -' in prev_msg.get('content', '').lower():
+                                content = prev_msg.get('content', '')
+                                if 'Payment Problems' in content:
+                                    issue_type = 'Payment Problems'
+                                elif 'App Crashes/Freezing' in content:
+                                    issue_type = 'App Crashes/Freezing'
+                                elif 'GPS/Tracking Issues' in content:
+                                    issue_type = 'GPS/Tracking Issues'
+                                elif 'Booking Failed' in content:
+                                    issue_type = 'Booking Failed'
+                                elif 'Wrong Fare Calculation' in content:
+                                    issue_type = 'Wrong Fare Calculation'
+
+                                if issue_type:
+                                    workflow_stage = "ai_processing"
+                                break
+
+                    response_text = handler.handle_app_booking_issues(
+                        query=message,
+                        issue_type=issue_type,
+                        workflow_stage=workflow_stage
+                    )
+
+                    session['messages'].append({'role': 'assistant', 'content': response_text})
+
+                    return jsonify({
+                        'response': response_text,
+                        'requires_image': False,
+                        'conversation_id': conversation_id
+                    })
+                except Exception as e:
+                    print(f"App booking handler call failed: {e}")
+                    # Fall through to AI engine processing
+
+            # Special handling for grab_cabs customer cancellation/refund issues (hybrid workflow)
+            if (service == 'grab_cabs' and user_type == 'customer' and
+                category == 'cancellation_refund' and sub_issue == 'handle_cancellation_refund_policy_complications'):
+
+                try:
+                    from grab_cabs.customer.customer_experience import CustomerExperienceHandler
+                    handler = CustomerExperienceHandler()
+
+                    # Determine workflow stage and issue type
+                    issue_type = None
+                    workflow_stage = "initial"
+
+                    message_lower = message.lower()
+                    if 'unfair cancellation fee' in message_lower:
+                        issue_type = 'Unfair Cancellation Fee'
+                        workflow_stage = "type_selected"
+                    elif 'refund not processed' in message_lower:
+                        issue_type = 'Refund Not Processed'
+                        workflow_stage = "type_selected"
+                    elif 'refund amount incorrect' in message_lower:
+                        issue_type = 'Refund Amount Incorrect'
+                        workflow_stage = "type_selected"
+                    elif 'policy not explained' in message_lower:
+                        issue_type = 'Policy Not Explained Clearly'
+                        workflow_stage = "type_selected"
+                    elif 'unable to cancel' in message_lower:
+                        issue_type = 'Unable to Cancel Ride'
+                        workflow_stage = "type_selected"
+                    else:
+                        # Check previous messages for issue type
+                        prev_messages = session.get('messages', [])
+                        for prev_msg in reversed(prev_messages):
+                            if prev_msg.get('role') == 'assistant' and 'cancellation/refund policy -' in prev_msg.get('content', '').lower():
+                                content = prev_msg.get('content', '')
+                                if 'Unfair Cancellation Fee' in content:
+                                    issue_type = 'Unfair Cancellation Fee'
+                                elif 'Refund Not Processed' in content:
+                                    issue_type = 'Refund Not Processed'
+                                elif 'Refund Amount Incorrect' in content:
+                                    issue_type = 'Refund Amount Incorrect'
+                                elif 'Policy Not Explained Clearly' in content:
+                                    issue_type = 'Policy Not Explained Clearly'
+                                elif 'Unable to Cancel Ride' in content:
+                                    issue_type = 'Unable to Cancel Ride'
+
+                                if issue_type:
+                                    workflow_stage = "ai_processing"
+                                break
+
+                    response_text = handler.handle_cancellation_refund_policy_complications(
+                        query=message,
+                        issue_type=issue_type,
+                        workflow_stage=workflow_stage
+                    )
+
+                    session['messages'].append({'role': 'assistant', 'content': response_text})
+
+                    return jsonify({
+                        'response': response_text,
+                        'requires_image': False,
+                        'conversation_id': conversation_id
+                    })
+                except Exception as e:
+                    print(f"Cancellation/refund handler call failed: {e}")
+                    # Fall through to AI engine processing
+
+            # Special handling for grab_cabs customer airport issues (hybrid workflow)
+            if (service == 'grab_cabs' and user_type == 'customer' and
+                category == 'airport_problems' and sub_issue == 'handle_airport_booking_problems'):
+
+                try:
+                    from grab_cabs.customer.customer_experience import CustomerExperienceHandler
+                    handler = CustomerExperienceHandler()
+
+                    # Determine workflow stage and issue type
+                    issue_type = None
+                    workflow_stage = "initial"
+
+                    message_lower = message.lower()
+                    if 'missed flight' in message_lower or 'late driver' in message_lower:
+                        issue_type = 'Missed Flight Due to Late Driver'
+                        workflow_stage = "type_selected"
+                    elif 'wrong terminal' in message_lower or 'wrong airport' in message_lower:
+                        issue_type = 'Wrong Terminal/Airport'
+                        workflow_stage = "type_selected"
+                    elif 'flight sync' in message_lower:
+                        issue_type = 'Flight Sync Issues'
+                        workflow_stage = "type_selected"
+                    elif 'airport pickup' in message_lower:
+                        issue_type = 'Airport Pickup Problems'
+                        workflow_stage = "type_selected"
+                    elif 'flight delay' in message_lower:
+                        issue_type = 'Flight Delay Complications'
+                        workflow_stage = "type_selected"
+                    else:
+                        # Check previous messages for issue type
+                        prev_messages = session.get('messages', [])
+                        for prev_msg in reversed(prev_messages):
+                            if prev_msg.get('role') == 'assistant' and 'airport booking problems -' in prev_msg.get('content', '').lower():
+                                content = prev_msg.get('content', '')
+                                if 'Missed Flight Due to Late Driver' in content:
+                                    issue_type = 'Missed Flight Due to Late Driver'
+                                elif 'Wrong Terminal/Airport' in content:
+                                    issue_type = 'Wrong Terminal/Airport'
+                                elif 'Flight Sync Issues' in content:
+                                    issue_type = 'Flight Sync Issues'
+                                elif 'Airport Pickup Problems' in content:
+                                    issue_type = 'Airport Pickup Problems'
+                                elif 'Flight Delay Complications' in content:
+                                    issue_type = 'Flight Delay Complications'
+
+                                if issue_type:
+                                    workflow_stage = "ai_processing"
+                                break
+
+                    response_text = handler.handle_airport_booking_problems(
+                        query=message,
+                        issue_type=issue_type,
+                        workflow_stage=workflow_stage
+                    )
+
+                    session['messages'].append({'role': 'assistant', 'content': response_text})
+
+                    return jsonify({
+                        'response': response_text,
+                        'requires_image': False,
+                        'conversation_id': conversation_id
+                    })
+                except Exception as e:
+                    print(f"Airport booking handler call failed: {e}")
+                    # Fall through to AI engine processing
+
+            # Special handling for grab_cabs driver passenger harassment (hybrid workflow)
+            if (service == 'grab_cabs' and user_type == 'driver' and
+                category == 'customer_experience' and sub_issue == 'handle_passenger_harassment_complaint'):
+
+                try:
+                    from grab_cabs.driver.customer_experience import CustomerExperienceHandler
+                    handler = CustomerExperienceHandler()
+
+                    # Determine workflow stage and harassment type
+                    harassment_type = None
+                    workflow_stage = "initial"
+
+                    # Check if this is a harassment type selection
+                    message_lower = message.lower()
+                    if 'threats' in message_lower:
+                        harassment_type = 'Threats'
+                        workflow_stage = "type_selected"
+                    elif 'verbal abuse' in message_lower:
+                        harassment_type = 'Verbal Abuse'
+                        workflow_stage = "type_selected"
+                    elif 'physical abuse' in message_lower:
+                        harassment_type = 'Physical Abuse'
+                        workflow_stage = "type_selected"
+                    elif 'stalking' in message_lower:
+                        harassment_type = 'Stalking'
+                        workflow_stage = "type_selected"
+                    elif 'inappropriate' in message_lower:
+                        harassment_type = 'Inappropriate Behaviour'
+                        workflow_stage = "type_selected"
+                    else:
+                        # Check if user already selected a type and is now providing description
+                        prev_messages = session.get('messages', [])
+                        for prev_msg in reversed(prev_messages):
+                            if prev_msg.get('role') == 'assistant' and 'harassment report -' in prev_msg.get('content', '').lower():
+                                # Extract harassment type from previous message
+                                content = prev_msg.get('content', '')
+                                if 'Threats' in content:
+                                    harassment_type = 'Threats'
+                                elif 'Verbal Abuse' in content:
+                                    harassment_type = 'Verbal Abuse'
+                                elif 'Physical Abuse' in content:
+                                    harassment_type = 'Physical Abuse'
+                                elif 'Stalking' in content:
+                                    harassment_type = 'Stalking'
+                                elif 'Inappropriate Behaviour' in content:
+                                    harassment_type = 'Inappropriate Behaviour'
+
+                                if harassment_type:
+                                    # Check if user wants to upload photo or said no evidence
+                                    if 'photo' in message.lower() or 'image' in message.lower() or 'evidence' in message.lower():
+                                        if 'no evidence' in message.lower():
+                                            workflow_stage = "ai_processing"
+                                        else:
+                                            workflow_stage = "image_request"
+                                    else:
+                                        # After text description, show image request
+                                        workflow_stage = "image_request"
+                                break
+
+                    response_text = handler.handle_passenger_harassment_complaint(
+                        query=message,
+                        harassment_type=harassment_type,
+                        workflow_stage=workflow_stage
+                    )
+
+                    session['messages'].append({'role': 'assistant', 'content': response_text})
+
+                    # Store harassment_type in session for image processing
+                    if harassment_type:
+                        session['harassment_type'] = harassment_type
+
+                    # Set requires_image to True when showing image upload prompt
+                    requires_image = workflow_stage == "image_request"
+
+                    return jsonify({
+                        'response': response_text,
+                        'requires_image': requires_image,
+                        'conversation_id': conversation_id
+                    })
+                except Exception as e:
+                    print(f"Passenger harassment handler call failed: {e}")
+                    # Fall through to AI engine processing
+
             from enhanced_ai_engine_fixed import EnhancedAgenticAIEngine
             ai_engine = EnhancedAgenticAIEngine()
             print(f"DEBUG: Using AI engine for conversation - service={service}, sub_issue={sub_issue}")
@@ -1176,6 +1573,156 @@ def chat_image():
                     })
                 except Exception as e:
                     print(f"Missing items image handler failed: {e}")
+                    # Fall through to AI engine processing
+
+            # Special handling for grab_cabs customer harassment with image
+            elif (service == 'grab_cabs' and user_type == 'customer' and
+                  session.get('sub_issue') == 'handle_driver_harassment_complaint'):
+
+                try:
+                    from grab_cabs.customer.customer_experience import CustomerExperienceHandler
+                    handler = CustomerExperienceHandler()
+
+                    # Extract harassment type from session or messages
+                    harassment_type = session.get('harassment_type')
+                    if not harassment_type:
+                        # Try to extract from conversation history
+                        for msg in reversed(session.get('messages', [])):
+                            if 'harassment report -' in msg.get('content', '').lower():
+                                content = msg.get('content', '')
+                                if 'Verbal Abuse' in content:
+                                    harassment_type = 'Verbal Abuse'
+                                elif 'Physical Abuse' in content:
+                                    harassment_type = 'Physical Abuse'
+                                elif 'Threats' in content:
+                                    harassment_type = 'Threats'
+                                elif 'Stalking' in content:
+                                    harassment_type = 'Stalking'
+                                elif 'Inappropriate Behaviour' in content:
+                                    harassment_type = 'Inappropriate Behaviour'
+                                break
+
+                    response_text = handler.handle_driver_harassment_complaint(
+                        query=last_user_message,
+                        harassment_type=harassment_type,
+                        image_data=image_data,
+                        workflow_stage="ai_processing"
+                    )
+
+                    session['messages'].append({'role': 'assistant', 'content': response_text})
+                    session['awaiting_image'] = False
+
+                    return jsonify({
+                        'response': response_text,
+                        'requires_image': False,
+                        'conversation_id': conversation_id
+                    })
+                except Exception as e:
+                    print(f"Customer harassment image handler failed: {e}")
+                    # Fall through to AI engine processing
+
+            # Special handling for grab_cabs driver harassment with image
+            elif (service == 'grab_cabs' and user_type == 'driver' and
+                  session.get('sub_issue') == 'handle_passenger_harassment_complaint'):
+
+                try:
+                    from grab_cabs.driver.customer_experience import CustomerExperienceHandler
+                    handler = CustomerExperienceHandler()
+
+                    # Extract harassment type from session or messages
+                    harassment_type = session.get('harassment_type')
+                    if not harassment_type:
+                        # Try to extract from conversation history
+                        for msg in reversed(session.get('messages', [])):
+                            if 'harassment report -' in msg.get('content', '').lower():
+                                content = msg.get('content', '')
+                                if 'Verbal Abuse' in content:
+                                    harassment_type = 'Verbal Abuse'
+                                elif 'Physical Abuse' in content:
+                                    harassment_type = 'Physical Abuse'
+                                elif 'Threats' in content:
+                                    harassment_type = 'Threats'
+                                elif 'Stalking' in content:
+                                    harassment_type = 'Stalking'
+                                elif 'Inappropriate Behaviour' in content:
+                                    harassment_type = 'Inappropriate Behaviour'
+                                break
+
+                    response_text = handler.handle_passenger_harassment_complaint(
+                        query=last_user_message,
+                        harassment_type=harassment_type,
+                        image_data=image_data,
+                        workflow_stage="ai_processing"
+                    )
+
+                    session['messages'].append({'role': 'assistant', 'content': response_text})
+                    session['awaiting_image'] = False
+
+                    return jsonify({
+                        'response': response_text,
+                        'requires_image': False,
+                        'conversation_id': conversation_id
+                    })
+                except Exception as e:
+                    print(f"Driver harassment image handler failed: {e}")
+                    # Fall through to AI engine processing
+
+            # Special handling for grab_cabs customer vehicle/ride issues with image
+            elif (service == 'grab_cabs' and user_type == 'customer' and
+                  session.get('sub_issue') in ['handle_unsafe_driving_behavior', 'handle_vehicle_problems', 'handle_accidents_during_ride']):
+
+                try:
+                    from grab_cabs.customer.driver_vehicle_issues import DriverVehicleIssuesHandler
+                    handler = DriverVehicleIssuesHandler()
+
+                    # Call the appropriate handler method
+                    sub_issue = session.get('sub_issue')
+                    if hasattr(handler, sub_issue):
+                        method = getattr(handler, sub_issue)
+                        response_text = method(query=last_user_message, image_data=image_data)
+                    else:
+                        # Fallback to generic processing
+                        response_text = f"Thank you for reporting this {sub_issue.replace('_', ' ')} issue with image evidence. We are processing your complaint and will respond shortly."
+
+                    session['messages'].append({'role': 'assistant', 'content': response_text})
+                    session['awaiting_image'] = False
+
+                    return jsonify({
+                        'response': response_text,
+                        'requires_image': False,
+                        'conversation_id': conversation_id
+                    })
+                except Exception as e:
+                    print(f"Vehicle issues image handler failed: {e}")
+                    # Fall through to AI engine processing
+
+            # Special handling for grab_cabs customer other issues with image
+            elif (service == 'grab_cabs' and user_type == 'customer' and
+                  session.get('sub_issue') in ['handle_app_booking_issues', 'handle_cancellation_refund_policy_complications', 'handle_airport_booking_problems']):
+
+                try:
+                    # Use the enhanced AI engine directly for these issues
+                    from enhanced_ai_engine_fixed import EnhancedAgenticAIEngine
+                    ai_engine = EnhancedAgenticAIEngine()
+
+                    response_text = ai_engine.process_complaint(
+                        function_name=session.get('sub_issue'),
+                        user_query=last_user_message,
+                        service=service,
+                        user_type=user_type,
+                        image_data=image_data
+                    )
+
+                    session['messages'].append({'role': 'assistant', 'content': response_text})
+                    session['awaiting_image'] = False
+
+                    return jsonify({
+                        'response': response_text,
+                        'requires_image': False,
+                        'conversation_id': conversation_id
+                    })
+                except Exception as e:
+                    print(f"Other Grab Cabs issues image handler failed: {e}")
                     # Fall through to AI engine processing
 
             response_text = ai_engine.process_complaint(
