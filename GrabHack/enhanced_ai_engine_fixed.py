@@ -12,6 +12,8 @@ import logging
 import base64
 import re
 import unicodedata
+import urllib.parse
+import requests
 from groq import Groq
 from typing import Dict, Any, Optional, List
 from dotenv import load_dotenv
@@ -21,9 +23,100 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
+
+class GoogleMapsAPI:
+    """Google Maps API integration for navigation assistance"""
+
+    def __init__(self):
+        self.api_key = os.getenv('GOOGLE_MAPS_API_KEY')
+        if not self.api_key:
+            logger.warning("GOOGLE_MAPS_API_KEY not found in environment variables")
+            self.api_key = None
+        self.base_url = "https://maps.googleapis.com/maps/api"
+
+    def geocode_address(self, address: str) -> Dict[str, Any]:
+        """Geocode an address to get coordinates and formatted address"""
+        if not self.api_key:
+            return {'success': False, 'error': 'API key not available', 'status': 'NO_API_KEY'}
+
+        try:
+            url = f"{self.base_url}/geocode/json"
+            params = {
+                'address': address,
+                'key': self.api_key
+            }
+
+            response = requests.get(url, params=params)
+            data = response.json()
+
+            if data['status'] == 'OK' and data['results']:
+                result = data['results'][0]
+                return {
+                    'success': True,
+                    'formatted_address': result['formatted_address'],
+                    'latitude': result['geometry']['location']['lat'],
+                    'longitude': result['geometry']['location']['lng'],
+                    'place_id': result['place_id'],
+                    'types': result.get('types', [])
+                }
+            else:
+                return {
+                    'success': False,
+                    'error': data.get('error_message', 'Address not found'),
+                    'status': data['status']
+                }
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e),
+                'status': 'API_ERROR'
+            }
+
+    def get_directions(self, origin: str, destination: str, mode: str = 'driving') -> Dict[str, Any]:
+        """Get directions between two points"""
+        if not self.api_key:
+            return {'success': False, 'error': 'API key not available', 'status': 'NO_API_KEY'}
+
+        try:
+            url = f"{self.base_url}/directions/json"
+            params = {
+                'origin': origin,
+                'destination': destination,
+                'mode': mode,
+                'key': self.api_key
+            }
+
+            response = requests.get(url, params=params)
+            data = response.json()
+
+            if data['status'] == 'OK' and data['routes']:
+                route = data['routes'][0]
+                leg = route['legs'][0]
+                return {
+                    'success': True,
+                    'distance': leg['distance']['text'],
+                    'duration': leg['duration']['text'],
+                    'start_address': leg['start_address'],
+                    'end_address': leg['end_address'],
+                    'steps': len(leg['steps']),
+                    'overview_polyline': route['overview_polyline']['points']
+                }
+            else:
+                return {
+                    'success': False,
+                    'error': data.get('error_message', 'Route not found'),
+                    'status': data['status']
+                }
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e),
+                'status': 'API_ERROR'
+            }
+
 class EnhancedAgenticAIEngine:
     """Enhanced AI Engine with image processing and security screening"""
-    
+
     def __init__(self):
         try:
             self.groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
@@ -37,6 +130,7 @@ class EnhancedAgenticAIEngine:
         self.image_model = "meta-llama/llama-4-maverick-17b-128e-instruct"  # For image processing
         self.security_model = "meta-llama/llama-prompt-guard-2-86m"  # For security screening
         self.orchestrator_model = "llama-3.3-70b-versatile"  # For orchestration
+        self.maps_api = GoogleMapsAPI()
         
         # Define which functions require images
         self.image_required_functions = {
@@ -139,22 +233,28 @@ class EnhancedAgenticAIEngine:
         return self._generate_enhanced_navigation_response(user_query)
     
     def _generate_enhanced_navigation_response(self, user_query: str, start_lat: float = None, start_lng: float = None, end_lat: float = None, end_lng: float = None) -> str:
-        """Generate enhanced navigation response with intelligent routing using coordinates when available"""
+        """Generate enhanced navigation response with intelligent routing using Google Maps API"""
 
         # Use coordinates if provided, otherwise extract from query or use defaults
         if start_lat and start_lng and end_lat and end_lng:
             # Generate coordinate-based navigation links for maximum accuracy
-            maps_url = f"https://www.google.com/maps/dir/{start_lat},{start_lng}/{end_lat},{end_lng}/"
-            waze_url = f"https://waze.com/ul?ll={end_lat},{end_lng}&navigate=yes"
             current_location = f"Location ({start_lat:.4f}, {start_lng:.4f})"
             destination = f"Destination ({end_lat:.4f}, {end_lng:.4f})"
+            maps_url = f"https://www.google.com/maps/dir/{start_lat},{start_lng}/{end_lat},{end_lng}/"
+            waze_url = f"https://waze.com/ul?ll={end_lat},{end_lng}&navigate=yes"
         else:
             # Fallback to address-based navigation
             current_location = self._extract_location_from_query(user_query, "current") or "Sapna Book Stores, Jayanagar, Bangalore"
             destination = self._extract_location_from_query(user_query, "destination") or "South End Circle Metro, Bangalore"
 
+            # Use Google Maps API to verify and enhance addresses
+            destination_verification = self.maps_api.geocode_address(destination)
+            if destination_verification['success']:
+                destination = destination_verification['formatted_address']
+                end_lat = destination_verification['latitude']
+                end_lng = destination_verification['longitude']
+
             # Generate navigation links
-            import urllib.parse
             current_encoded = urllib.parse.quote(current_location)
             dest_encoded = urllib.parse.quote(destination)
             maps_url = f"https://www.google.com/maps/dir/{current_encoded}/{dest_encoded}/"
@@ -199,17 +299,30 @@ class EnhancedAgenticAIEngine:
 - Check traffic conditions before leaving
 - Keep phone charged with power bank backup"""
         
+        # Get real-time route information if possible
+        route_info = ""
+        if current_location and destination:
+            directions_result = self.maps_api.get_directions(current_location, destination)
+            if directions_result['success']:
+                route_info = f"""
+**📊 Real-time Route Information:**
+- **Distance:** {directions_result['distance']}
+- **Estimated Time:** {directions_result['duration']}
+- **Route Steps:** {directions_result['steps']} navigation points
+"""
+
         return f"""{icon} **{response_type}**
 
 **📍 Navigation Links (Click to Open):**
 
-🗺️ **Google Maps:** https://www.google.com/maps/dir/{current_encoded}/{dest_encoded}/
+🗺️ **Google Maps:** [Open Navigation]({maps_url})
 
-🚗 **Waze Alternative:** https://waze.com/ul?q={dest_encoded}&navigate=yes
+🚗 **Waze Alternative:** [Open Navigation]({waze_url})
 
 **🎯 Route Information:**
 - **From:** {current_location}
 - **To:** {destination}
+{route_info}
 
 {specific_help}
 
