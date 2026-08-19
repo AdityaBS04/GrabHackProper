@@ -1,0 +1,22 @@
+# Render blueprint for the GrabHack Flask backend.
+# Render > New > Blueprint, point it at this repo, and it reads this file.
+services:
+  - type: web
+    name: grabhack-api
+    runtime: python
+    plan: free
+    rootDir: GrabHack
+    buildCommand: pip install -r requirements.txt
+    # 1 worker: the SQLite database is a single file with no cross-process
+    # locking strategy here, so concurrent writers would hit "database is locked".
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 120
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.4
+      - key: GROQ_API_KEY
+        sync: false          # set this in the Render dashboard, never in git
+      - key: GOOGLE_MAPS_API_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false          # e.g. https://your-app.vercel.app

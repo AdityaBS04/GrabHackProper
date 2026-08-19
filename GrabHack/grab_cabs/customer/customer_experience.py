@@ -6,6 +6,7 @@ Uses AI models for intelligent complaint resolution
 import logging
 import os
 import sys
+import sqlite3
 from typing import Optional
 
 # Add parent directory to path to import enhanced_ai_engine
@@ -17,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 class CustomerExperienceHandler:
     """Customer-focused experience management with real AI"""
-    
+
     def __init__(self, groq_api_key: str = None):
         self.service = "grab_cabs"
         self.actor = "customer"
@@ -27,52 +28,183 @@ class CustomerExperienceHandler:
         except Exception as e:
             logger.warning(f"AI engine initialization failed: {e}")
             self.ai_engine = None
-        
-    def handle_app_booking_issues(self, query: str, issue_type: str = None, image_data: Optional[str] = None, workflow_stage: str = "initial") -> str:
-        """Handle app or booking issues with structured workflow"""
-        logger.info(f"Processing app/booking issues - Type: {issue_type}, Stage: {workflow_stage}")
 
-        # STAGE 1: Show strict dropdown options (NO AI)
-        if workflow_stage == "initial" or not issue_type:
-            return """🚗 **App/Booking Issues Report**
+    def handle_app_booking_issues(self, query: str, image_data: Optional[str] = None, username: str = "anonymous") -> str:
+        """Handle app or booking issues with strict 5-step workflow"""
+        logger.info(f"Processing app/booking issue: {query[:100]}...")
 
-Please select the type of issue you're experiencing:
+        # Step 1: Analyze the app or booking issue type from the query
+        analysis = self.analyze_app_booking_issue(query)
+        logger.info(f"Analysis: {analysis}")
 
-**📋 Select Issue Type:**
-☐ Payment Problems
-☐ App Crashes/Freezing
-☐ GPS/Tracking Issues
-☐ Booking Failed
-☐ Wrong Fare Calculation
+        # Step 2: Check account status and booking context
+        context = self.check_booking_context(analysis, query)
+        logger.info(f"Context: {context}")
 
-Please select one option above to continue with your report."""
+        # Step 3: Check customer credibility score
+        credibility_score = self.get_credibility_score(username)
+        logger.info(f"Credibility: {credibility_score}/10")
 
-        # STAGE 2: Show apology and description prompt (NO AI)
-        if issue_type and workflow_stage == "type_selected":
-            return f"""🚗 **App/Booking Issues - {issue_type}**
+        # Step 4: Decide resolution based on issue type and credibility
+        decision = self.decide_app_booking_resolution(analysis, context, credibility_score)
+        logger.info(f"Decision: {decision}")
 
-**We apologize for the technical difficulties you're experiencing.**
+        # Step 5: Generate response with troubleshooting steps and support info
+        response = self.generate_app_booking_response(decision, analysis, query, image_data)
+        logger.info("App/booking issue response generated successfully")
 
-This is not the smooth experience we strive to provide. We're committed to resolving technical issues quickly to ensure seamless ride booking for all our customers.
+        return response
 
-**📝 Please describe the issue:**
+    def handle_cancellation_refund_policy_complications(self, query: str, image_data: Optional[str] = None, username: str = "anonymous") -> str:
+        """Handle cancellation/refund policy complications with strict 5-step workflow"""
+        logger.info(f"Processing cancellation/refund policy issue: {query[:100]}...")
 
-Please provide details about what happened:
-- What were you trying to do when the problem occurred?
-- Any error messages you received
-- Screenshots of the issue if available
-- Your device type and app version
+        # Step 1: Analyze the cancellation or refund issue type from the query
+        analysis = self.analyze_cancellation_refund_issue(query)
+        logger.info(f"Analysis: {analysis}")
 
-**Upload Evidence:** Screenshots or screen recordings can help us resolve this faster.
+        # Step 2: Check policy compliance and charge records
+        policy_check = self.check_policy_and_charges(analysis, query)
+        logger.info(f"Policy check: {policy_check}")
 
-**After you submit your description, our technical team will analyze the issue and provide immediate assistance.**"""
+        # Step 3: Check customer credibility score
+        credibility_score = self.get_credibility_score(username)
+        logger.info(f"Credibility: {credibility_score}/10")
 
-        # STAGE 3: AI processes the user's description
-        if issue_type and query and workflow_stage == "ai_processing":
-            if self.ai_engine:
+        # Step 4: Decide on refund, waiver, or policy explanation
+        decision = self.decide_cancellation_refund_resolution(analysis, policy_check, credibility_score)
+        logger.info(f"Decision: {decision}")
+
+        # Step 5: Generate response with policy clarification and resolution
+        response = self.generate_cancellation_refund_response(decision, analysis, query, image_data)
+        logger.info("Cancellation/refund response generated successfully")
+
+        return response
+
+    def handle_airport_booking_problems(self, query: str, image_data: Optional[str] = None, username: str = "anonymous") -> str:
+        """Handle airport booking problems with strict 5-step workflow"""
+        logger.info(f"Processing airport booking problem: {query[:100]}...")
+
+        # Step 1: Analyze the airport issue type and severity impact
+        analysis = self.analyze_airport_issue(query)
+        logger.info(f"Analysis: {analysis}")
+
+        # Step 2: Check flight and booking timeline details
+        flight_check = self.check_flight_booking_details(analysis, query)
+        logger.info(f"Flight check: {flight_check}")
+
+        # Step 3: Check customer credibility score
+        credibility_score = self.get_credibility_score(username)
+        logger.info(f"Credibility: {credibility_score}/10")
+
+        # Step 4: Decide on compensation and service recovery
+        decision = self.decide_airport_resolution(analysis, flight_check, credibility_score)
+        logger.info(f"Decision: {decision}")
+
+        # Step 5: Generate priority response with compensation and escalation
+        response = self.generate_airport_response(decision, analysis, query, image_data)
+        logger.info("Airport booking response generated successfully")
+
+        return response
+
+    def handle_driver_harassment_complaint(self, query: str, image_data: Optional[str] = None, username: str = "anonymous") -> str:
+        """Handle driver harassment complaints with strict 5-step workflow"""
+        logger.info(f"Processing driver harassment complaint: {query[:100]}...")
+
+        # Step 1: Analyze the harassment type and incident severity
+        analysis = self.analyze_harassment_incident(query)
+        logger.info(f"Analysis: {analysis}")
+
+        # Step 2: Check incident evidence and driver record
+        evidence_check = self.check_harassment_evidence(analysis, query, image_data)
+        logger.info(f"Evidence check: {evidence_check}")
+
+        # Step 3: Check customer credibility score
+        credibility_score = self.get_credibility_score(username)
+        logger.info(f"Credibility: {credibility_score}/10")
+
+        # Step 4: Decide driver action and customer support measures
+        decision = self.decide_harassment_resolution(analysis, evidence_check, credibility_score)
+        logger.info(f"Decision: {decision}")
+
+        # Step 5: Generate empathetic response with safety resources and case actions
+        response = self.generate_harassment_response(decision, analysis, query, image_data)
+        logger.info("Driver harassment response generated successfully")
+
+        return response
+
+    # ===== SUPPORTING METHODS FOR STRICT WORKFLOWS =====
+
+    def _db_path(self) -> Optional[str]:
+        """Resolve the path to the GrabHack database, or None if it cannot be found"""
+        paths = ['grabhack.db', '../grabhack.db', 'GrabHack/grabhack.db',
+                 os.path.join(os.path.dirname(__file__), '../../../grabhack.db')]
+        return next((p for p in paths if os.path.exists(p)), None)
+
+    def get_credibility_score(self, username: str) -> int:
+        base_score = 7
+        if not username or username == "anonymous":
+            return max(1, base_score - 2)
+        try:
+            db_path = self._db_path()
+            if not db_path:
+                return base_score
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            cursor.execute('SELECT credibility_score FROM users WHERE username = ?', (username,))
+            row = cursor.fetchone()
+            conn.close()
+            return row[0] if row else base_score
+        except Exception as e:
+            logger.error(f"Error fetching credibility: {e}")
+            return base_score
+
+    def analyze_app_booking_issue(self, query: str) -> str:
+        query_lower = query.lower()
+        if any(w in query_lower for w in ['payment', 'charge', 'fare', 'billed']):
+            return "payment_issue"
+        elif any(w in query_lower for w in ['crash', 'freeze', 'not working', 'app']):
+            return "app_technical_issue"
+        elif any(w in query_lower for w in ['gps', 'tracking', 'location']):
+            return "gps_tracking_issue"
+        elif any(w in query_lower for w in ['book', 'booking', 'failed', 'unable']):
+            return "booking_failure"
+        else:
+            return "general_app_issue"
+
+    def check_booking_context(self, analysis: str, query: str) -> str:
+        if analysis == "payment_issue":
+            return "payment_context_flagged_for_review"
+        elif analysis == "app_technical_issue":
+            return "technical_team_notified"
+        elif analysis == "booking_failure":
+            return "booking_system_check_initiated"
+        return "standard_support_context"
+
+    def decide_app_booking_resolution(self, analysis: str, context: str, credibility_score: int) -> str:
+        # A confirmed system-side failure is ours to fix regardless of rider standing
+        if context == "booking_system_check_initiated":
+            return "rebooking_with_discount"
+        elif context == "technical_team_notified" and credibility_score >= 5:
+            return "priority_technical_support"
+        elif credibility_score >= 7:
+            if analysis == "payment_issue":
+                return "immediate_refund_investigation"
+            elif analysis == "app_technical_issue":
+                return "priority_technical_support"
+            elif analysis == "booking_failure":
+                return "rebooking_with_discount"
+            return "full_support_with_escalation"
+        else:
+            return "standard_support_with_review"
+
+    def generate_app_booking_response(self, decision: str, analysis: str, query: str, image_data: Optional[str] = None) -> str:
+        if self.ai_engine:
+            try:
                 ai_context = f"""
-                ISSUE TYPE: {issue_type}
+                ISSUE TYPE: {analysis}
                 USER DESCRIPTION: {query}
+                RESOLUTION DECISION: {decision}
 
                 Generate a technical support response that:
                 1. Acknowledges their specific technical issue
@@ -83,17 +215,14 @@ Please provide details about what happened:
 
                 Be technical but helpful, and specific to their app/booking issue.
                 """
-
-                try:
-                    ai_response = self.ai_engine.process_complaint(
-                        function_name="handle_app_booking_technical_support",
-                        user_query=ai_context,
-                        service=self.service,
-                        user_type=self.actor,
-                        image_data=image_data
-                    )
-
-                    support_info = f"""
+                ai_response = self.ai_engine.process_complaint(
+                    function_name="handle_app_booking_technical_support",
+                    user_query=ai_context,
+                    service=self.service,
+                    user_type=self.actor,
+                    image_data=image_data
+                )
+                return f"""{ai_response}
 
 📞 **Technical Support Available:**
 - 24/7 App Support: Available in your Grab app
@@ -106,15 +235,11 @@ Please provide details about what happened:
 ✅ Account credited if applicable
 ✅ Priority support activated
 
-**Case Reference:** GC-TECH-{issue_type.upper().replace(' ', '')}-001"""
+**Case Reference:** GC-TECH-{analysis.upper()}-001"""
+            except Exception as e:
+                logger.error(f"AI processing failed: {e}")
 
-                    return f"{ai_response}{support_info}"
-
-                except Exception as e:
-                    logger.error(f"AI processing failed: {e}")
-
-            # Fallback if AI fails
-            return f"""I understand you're experiencing {issue_type} with our app. This is frustrating and we're here to help resolve this immediately.
+        return f"""I understand you're experiencing an issue with our app. We're here to resolve this immediately.
 
 **Quick troubleshooting steps:**
 1. Force close and restart the Grab app
@@ -125,55 +250,55 @@ Please provide details about what happened:
 **Your issue has been escalated to our technical team.** Based on your description: "{query[:100]}{'...' if len(query) > 100 else ''}", we're investigating this immediately.
 
 📞 **Immediate Support:** 1-800-GRAB-TECH
-**Case Reference:** GC-TECH-{issue_type.upper().replace(' ', '')}-001"""
+**Case Reference:** GC-TECH-{analysis.upper()}-001"""
 
-        return "Please specify the issue type to continue with your report."
+    def analyze_cancellation_refund_issue(self, query: str) -> str:
+        query_lower = query.lower()
+        if any(w in query_lower for w in ['fee', 'charged', 'unfair', 'penalt']):
+            return "unfair_cancellation_fee"
+        elif any(w in query_lower for w in ['refund not', 'not received', 'not processed']):
+            return "refund_not_processed"
+        elif any(w in query_lower for w in ['wrong amount', 'incorrect', 'less than']):
+            return "incorrect_refund_amount"
+        elif any(w in query_lower for w in ['policy', 'explain', 'understand']):
+            return "policy_not_clear"
+        elif any(w in query_lower for w in ['cancel', 'unable', "can't cancel"]):
+            return "unable_to_cancel"
+        return "general_cancellation_issue"
 
-    def handle_cancellation_refund_policy_complications(self, query: str, issue_type: str = None, image_data: Optional[str] = None, workflow_stage: str = "initial") -> str:
-        """Handle cancellation/refund policy complications with structured workflow"""
-        logger.info(f"Processing cancellation/refund policy - Type: {issue_type}, Stage: {workflow_stage}")
+    def check_policy_and_charges(self, analysis: str, query: str) -> str:
+        if analysis == "unfair_cancellation_fee":
+            return "cancellation_fee_policy_applies_within_5_minutes"
+        elif analysis == "refund_not_processed":
+            return "refund_processing_time_3_to_5_business_days"
+        elif analysis == "incorrect_refund_amount":
+            return "refund_amount_flagged_for_manual_verification"
+        return "standard_policy_applies"
 
-        # STAGE 1: Show strict dropdown options (NO AI)
-        if workflow_stage == "initial" or not issue_type:
-            return """💰 **Cancellation/Refund Policy Issues**
+    def decide_cancellation_refund_resolution(self, analysis: str, policy_check: str, credibility_score: int) -> str:
+        # An amount our own check flagged is corrected without waiting on standing
+        if policy_check == "refund_amount_flagged_for_manual_verification":
+            return "full_refund_investigation_and_correction"
+        elif policy_check == "refund_processing_time_3_to_5_business_days" and credibility_score >= 5:
+            return "priority_refund_processing"
+        elif credibility_score >= 7:
+            if analysis == "unfair_cancellation_fee":
+                return "waive_cancellation_fee_as_goodwill"
+            elif analysis == "refund_not_processed":
+                return "priority_refund_processing"
+            elif analysis == "incorrect_refund_amount":
+                return "full_refund_investigation_and_correction"
+            return "full_policy_review_with_resolution"
+        else:
+            return "standard_policy_explanation_with_review"
 
-Please select the type of policy issue you're experiencing:
-
-**📋 Select Issue Type:**
-☐ Unfair Cancellation Fee
-☐ Refund Not Processed
-☐ Refund Amount Incorrect
-☐ Policy Not Explained Clearly
-☐ Unable to Cancel Ride
-
-Please select one option above to continue with your report."""
-
-        # STAGE 2: Show apology and description prompt (NO AI)
-        if issue_type and workflow_stage == "type_selected":
-            return f"""💰 **Cancellation/Refund Policy - {issue_type}**
-
-**We understand your frustration with this policy matter.**
-
-Our cancellation and refund policies are designed to be fair for both customers and drivers. We're committed to ensuring transparency and resolving any policy-related concerns promptly.
-
-**📝 Please describe your situation:**
-
-Please provide details about your experience:
-- When did this issue occur?
-- What cancellation/refund were you expecting?
-- Any screenshots of charges or policy information
-- Previous communication with support if any
-
-**Upload Evidence:** Screenshots of charges, app screens, or emails can help us review your case.
-
-**After you submit your details, our policy team will review your case and provide clarification or resolution.**"""
-
-        # STAGE 3: AI processes the user's description
-        if issue_type and query and workflow_stage == "ai_processing":
-            if self.ai_engine:
+    def generate_cancellation_refund_response(self, decision: str, analysis: str, query: str, image_data: Optional[str] = None) -> str:
+        if self.ai_engine:
+            try:
                 ai_context = f"""
-                POLICY ISSUE TYPE: {issue_type}
+                POLICY ISSUE TYPE: {analysis}
                 USER DESCRIPTION: {query}
+                RESOLUTION DECISION: {decision}
 
                 Generate a policy support response that:
                 1. Acknowledges their policy concern
@@ -184,17 +309,14 @@ Please provide details about your experience:
 
                 Be empathetic but clear about policies, specific to their cancellation/refund issue.
                 """
-
-                try:
-                    ai_response = self.ai_engine.process_complaint(
-                        function_name="handle_cancellation_refund_policy_support",
-                        user_query=ai_context,
-                        service=self.service,
-                        user_type=self.actor,
-                        image_data=image_data
-                    )
-
-                    policy_info = f"""
+                ai_response = self.ai_engine.process_complaint(
+                    function_name="handle_cancellation_refund_policy_support",
+                    user_query=ai_context,
+                    service=self.service,
+                    user_type=self.actor,
+                    image_data=image_data
+                )
+                return f"""{ai_response}
 
 💰 **Policy & Billing Support:**
 - 24/7 Billing Support: Available in your Grab app
@@ -207,15 +329,11 @@ Please provide details about your experience:
 ✅ Refund processing if applicable
 ✅ Policy clarification provided
 
-**Case Reference:** GC-POLICY-{issue_type.upper().replace(' ', '')}-001"""
+**Case Reference:** GC-POLICY-{analysis.upper()}-001"""
+            except Exception as e:
+                logger.error(f"AI processing failed: {e}")
 
-                    return f"{ai_response}{policy_info}"
-
-                except Exception as e:
-                    logger.error(f"AI processing failed: {e}")
-
-            # Fallback if AI fails
-            return f"""I understand your concern about {issue_type}. Our policies should be clear and fair, and we're here to resolve this for you.
+        return f"""I understand your concern about your cancellation/refund. Our policies should be clear and fair, and we're here to resolve this for you.
 
 **We're reviewing your case immediately.** Based on your description: "{query[:100]}{'...' if len(query) > 100 else ''}", our policy team will investigate this matter.
 
@@ -226,55 +344,58 @@ Please provide details about your experience:
 4. Account adjustment if warranted
 
 💰 **Immediate Support:** 1-800-GRAB-BILLING
-**Case Reference:** GC-POLICY-{issue_type.upper().replace(' ', '')}-001"""
+**Case Reference:** GC-POLICY-{analysis.upper()}-001"""
 
-        return "Please specify the policy issue type to continue with your report."
+    def analyze_airport_issue(self, query: str) -> str:
+        query_lower = query.lower()
+        if any(w in query_lower for w in ['missed flight', 'late', 'delayed arrival']):
+            return "missed_flight_due_to_late_driver"
+        elif any(w in query_lower for w in ['wrong terminal', 'wrong airport']):
+            return "wrong_terminal_or_airport"
+        elif any(w in query_lower for w in ['sync', 'flight update', 'not updated']):
+            return "flight_sync_issue"
+        elif any(w in query_lower for w in ['pickup', 'driver not found', 'no driver']):
+            return "airport_pickup_problem"
+        elif any(w in query_lower for w in ['delay', 'flight delay', 'rebooking']):
+            return "flight_delay_complication"
+        return "general_airport_issue"
 
-    def handle_airport_booking_problems(self, query: str, issue_type: str = None, image_data: Optional[str] = None, workflow_stage: str = "initial") -> str:
-        """Handle airport booking problems with structured workflow"""
-        logger.info(f"Processing airport booking problems - Type: {issue_type}, Stage: {workflow_stage}")
+    def check_flight_booking_details(self, analysis: str, query: str) -> str:
+        if analysis == "missed_flight_due_to_late_driver":
+            return "critical_impact_flight_missed_full_compensation_review"
+        elif analysis == "wrong_terminal_or_airport":
+            return "navigation_error_driver_accountability_check"
+        elif analysis == "airport_pickup_problem":
+            return "driver_dispatch_logs_reviewed"
+        return "standard_airport_case_review"
 
-        # STAGE 1: Show strict dropdown options (NO AI)
-        if workflow_stage == "initial" or not issue_type:
-            return """✈️ **Airport Booking Problems**
+    def decide_airport_resolution(self, analysis: str, flight_check: str, credibility_score: int) -> str:
+        # A missed flight is an unrecoverable loss, and a driver navigation error is
+        # provable from our own dispatch data, so neither waits on a credibility score
+        if flight_check == "critical_impact_flight_missed_full_compensation_review":
+            return "full_compensation_for_rebooking_and_losses"
+        elif flight_check == "navigation_error_driver_accountability_check":
+            return "full_refund_plus_additional_compensation"
+        elif flight_check == "driver_dispatch_logs_reviewed" and credibility_score >= 5:
+            return "priority_refund_and_service_credit"
+        elif credibility_score >= 6:
+            if analysis == "missed_flight_due_to_late_driver":
+                return "full_compensation_for_rebooking_and_losses"
+            elif analysis == "wrong_terminal_or_airport":
+                return "full_refund_plus_additional_compensation"
+            elif analysis == "airport_pickup_problem":
+                return "priority_refund_and_service_credit"
+            return "premium_service_recovery_with_compensation"
+        else:
+            return "standard_investigation_with_partial_compensation"
 
-Please select the type of airport-related issue you're experiencing:
-
-**📋 Select Issue Type:**
-☐ Missed Flight Due to Late Driver
-☐ Wrong Terminal/Airport
-☐ Flight Sync Issues
-☐ Airport Pickup Problems
-☐ Flight Delay Complications
-
-Please select one option above to continue with your report."""
-
-        # STAGE 2: Show apology and description prompt (NO AI)
-        if issue_type and workflow_stage == "type_selected":
-            return f"""✈️ **Airport Booking Problems - {issue_type}**
-
-**We sincerely apologize for this travel disruption.**
-
-We understand how critical airport timing is for your travel plans. Missing flights or experiencing airport-related issues can be extremely stressful and costly. We take full responsibility and are committed to making this right.
-
-**📝 Please describe what happened:**
-
-Please provide details about your airport experience:
-- Your flight details (flight number, time, terminal)
-- What went wrong with your Grab ride
-- Any additional costs incurred (rebooking fees, etc.)
-- Screenshots of your booking and flight information
-
-**Upload Evidence:** Flight confirmations, receipts, and booking screenshots will help us process compensation faster.
-
-**After you submit your details, our airport team will prioritize your case and provide immediate compensation for any losses.**"""
-
-        # STAGE 3: AI processes the user's description
-        if issue_type and query and workflow_stage == "ai_processing":
-            if self.ai_engine:
+    def generate_airport_response(self, decision: str, analysis: str, query: str, image_data: Optional[str] = None) -> str:
+        if self.ai_engine:
+            try:
                 ai_context = f"""
-                AIRPORT ISSUE TYPE: {issue_type}
+                AIRPORT ISSUE TYPE: {analysis}
                 USER DESCRIPTION: {query}
+                RESOLUTION DECISION: {decision}
 
                 Generate an airport support response that:
                 1. Acknowledges the severe impact of airport/flight issues
@@ -285,17 +406,14 @@ Please provide details about your airport experience:
 
                 Be very apologetic and generous with compensation for airport issues.
                 """
-
-                try:
-                    ai_response = self.ai_engine.process_complaint(
-                        function_name="handle_airport_booking_priority_support",
-                        user_query=ai_context,
-                        service=self.service,
-                        user_type=self.actor,
-                        image_data=image_data
-                    )
-
-                    airport_info = f"""
+                ai_response = self.ai_engine.process_complaint(
+                    function_name="handle_airport_booking_priority_support",
+                    user_query=ai_context,
+                    service=self.service,
+                    user_type=self.actor,
+                    image_data=image_data
+                )
+                return f"""{ai_response}
 
 ✈️ **Airport Priority Support:**
 - 24/7 Airport Support: 1-800-GRAB-AIRPORT
@@ -308,15 +426,11 @@ Please provide details about your airport experience:
 ✅ Premium service recovery activated
 ✅ Future airport bookings prioritized
 
-**Case Reference:** GC-AIRPORT-{issue_type.upper().replace(' ', '')}-001"""
+**Case Reference:** GC-AIRPORT-{analysis.upper()}-001"""
+            except Exception as e:
+                logger.error(f"AI processing failed: {e}")
 
-                    return f"{ai_response}{airport_info}"
-
-                except Exception as e:
-                    logger.error(f"AI processing failed: {e}")
-
-            # Fallback if AI fails
-            return f"""I am deeply sorry about {issue_type}. Airport issues are our highest priority and we take full responsibility for this travel disruption.
+        return f"""I am deeply sorry about this airport issue. Airport incidents are our highest priority and we take full responsibility for this disruption.
 
 **Immediate compensation being processed.** Based on your description: "{query[:100]}{'...' if len(query) > 100 else ''}", our airport team is handling your case with maximum priority.
 
@@ -327,99 +441,72 @@ Please provide details about your airport experience:
 4. Ensuring this doesn't happen again
 
 ✈️ **Emergency Airport Support:** 1-800-GRAB-AIRPORT
-**Case Reference:** GC-AIRPORT-{issue_type.upper().replace(' ', '')}-001"""
+**Case Reference:** GC-AIRPORT-{analysis.upper()}-001"""
 
-        return "Please specify the airport issue type to continue with your report."
+    def analyze_harassment_incident(self, query: str) -> str:
+        query_lower = query.lower()
+        if any(w in query_lower for w in ['threat', 'threaten', 'dangerous']):
+            return "threats"
+        elif any(w in query_lower for w in ['verbal', 'shout', 'scream', 'insult', 'abuse']):
+            return "verbal_abuse"
+        elif any(w in query_lower for w in ['physical', 'hit', 'push', 'touch', 'assault']):
+            return "physical_abuse"
+        elif any(w in query_lower for w in ['stalk', 'follow', 'tracking', 'watching']):
+            return "stalking"
+        elif any(w in query_lower for w in ['inappropriate', 'uncomfortable', 'harass', 'sexual']):
+            return "inappropriate_behaviour"
+        return "general_harassment"
 
-    def handle_driver_harassment_complaint(self, query: str, harassment_type: str = None, image_data: Optional[str] = None, workflow_stage: str = "initial") -> str:
-        """Handle driver harassment complaints with strict dropdown + AI interpretation hybrid"""
-        logger.info(f"Processing driver harassment complaint - Type: {harassment_type}, Stage: {workflow_stage}")
+    def check_harassment_evidence(self, analysis: str, query: str, image_data: Optional[str] = None) -> str:
+        has_image = image_data is not None
+        if analysis == "physical_abuse":
+            return f"critical_severity_immediate_escalation_image_evidence={'yes' if has_image else 'no'}"
+        elif analysis == "threats":
+            return f"high_severity_safety_team_alert_image_evidence={'yes' if has_image else 'no'}"
+        elif analysis in ["verbal_abuse", "inappropriate_behaviour"]:
+            return f"medium_severity_driver_review_triggered_image_evidence={'yes' if has_image else 'no'}"
+        return f"standard_review_image_evidence={'yes' if has_image else 'no'}"
 
-        # STAGE 1: Show strict dropdown options (NO AI)
-        if workflow_stage == "initial" or not harassment_type:
-            return """🚨 **Driver Harassment Report**
+    def decide_harassment_resolution(self, analysis: str, evidence_check: str, credibility_score: int) -> str:
+        if analysis in ["physical_abuse", "threats"]:
+            return "immediate_driver_suspension_emergency_escalation"
+        # Submitted image evidence carries the case further than standing alone would
+        elif evidence_check.endswith("image_evidence=yes"):
+            return "driver_suspended_pending_investigation_full_support"
+        elif credibility_score >= 6:
+            if analysis in ["verbal_abuse", "inappropriate_behaviour"]:
+                return "driver_suspended_pending_investigation_full_support"
+            return "driver_review_initiated_customer_support_provided"
+        else:
+            return "standard_investigation_with_customer_support"
 
-Please select the type of harassment you experienced:
-
-**📋 Select Harassment Type:**
-☐ Threats
-☐ Verbal Abuse
-☐ Physical Abuse
-☐ Stalking
-☐ Inappropriate Behaviour
-
-Please select one option above to continue with your report."""
-
-        # STAGE 2: Show apology and description prompt (NO AI)
-        if harassment_type and workflow_stage == "type_selected":
-            return f"""🚨 **Driver Harassment Report - {harassment_type}**
-
-**We are deeply sorry this happened to you.**
-
-This behavior goes completely against Grab's core values. We are committed to providing a safe, respectful environment for all our customers. Customer safety is our absolute priority, and we take these incidents extremely seriously.
-
-**📝 Please describe what happened:**
-
-Please provide a detailed description of the incident. You can include:
-- Text description of what occurred
-- Date and time of the incident
-- Driver details if known
-
-**After you submit your description, you'll be prompted to upload evidence if available.**"""
-
-        # STAGE 3: Request image upload after text description
-        if harassment_type and workflow_stage == "image_request":
-            return f"""📷 **Evidence Upload - {harassment_type}**
-
-Thank you for providing the details about your {harassment_type} incident.
-
-**Please upload evidence if you have any:**
-
-📸 **Photos or screenshots** that support your report:
-- Screenshots of inappropriate messages
-- Photos of any relevant evidence
-- Pictures that document the incident (if safe to take)
-
-**Note:** Evidence helps us:
-- Process your case faster
-- Take appropriate action against the driver
-- Provide better support for your situation
-
-**🔄 If you don't have evidence to upload, type "no evidence" to continue to the final resolution.**"""
-
-        # STAGE 4: AI processes with Llama Maverick for image analysis + personalized response
-        if harassment_type and query and workflow_stage == "ai_processing":
-            if self.ai_engine:
-                # Use AI to generate contextual, empathetic response based on user's specific situation
-                # If image provided, Llama Maverick will analyze it for evidence verification
+    def generate_harassment_response(self, decision: str, analysis: str, query: str, image_data: Optional[str] = None) -> str:
+        if self.ai_engine:
+            try:
                 ai_context = f"""
-                HARASSMENT TYPE: {harassment_type}
+                HARASSMENT TYPE: {analysis}
                 USER DESCRIPTION: {query}
+                RESOLUTION DECISION: {decision}
                 IMAGE PROVIDED: {"Yes - analyze for evidence" if image_data else "No"}
 
                 Generate a personalized, empathetic response that:
-                1. Acknowledges their specific situation
+                1. Acknowledges their specific situation with genuine care
                 2. {"Analyzes the provided evidence and incorporates findings" if image_data else "Processes text description thoroughly"}
                 3. Provides relevant safety advice for their harassment type
                 4. Offers specific next steps based on their description
                 5. Shows understanding of the emotional impact
-                6. Provides tailored resources
+                6. Provides tailored safety resources
 
-                {"If image evidence is provided, comment on what you can observe and how it supports their case." if image_data else ""}
                 Be conversational, supportive, and specific to their situation.
                 """
-
-                try:
-                    ai_response = self.ai_engine.process_complaint(
-                        function_name="handle_driver_harassment_personalized",
-                        user_query=ai_context,
-                        service=self.service,
-                        user_type=self.actor,
-                        image_data=image_data
-                    )
-
-                    # Add structured helplines after AI response
-                    helplines = f"""
+                ai_response = self.ai_engine.process_complaint(
+                    function_name="handle_driver_harassment_personalized",
+                    user_query=ai_context,
+                    service=self.service,
+                    user_type=self.actor,
+                    image_data=image_data
+                )
+                return f"""{ai_response}
 
 🆘 **Emergency Helplines & Support**
 
@@ -438,21 +525,17 @@ Thank you for providing the details about your {harassment_type} incident.
 - Counseling Services: Available through Grab partnership
 - Legal Support: Contact our legal team for guidance
 
-**Case Reference:** GC-HARASSMENT-{harassment_type.upper().replace(' ', '')}-001
+**Case Reference:** GC-HARASSMENT-{analysis.upper()}-001
 
 **Action Taken:**
 ✅ Driver immediately suspended pending investigation
 ✅ Incident escalated to safety team
 ✅ Case opened with reference number above
 ✅ You will receive follow-up within 2 hours"""
+            except Exception as e:
+                logger.error(f"AI processing failed: {e}")
 
-                    return f"{ai_response}{helplines}"
-
-                except Exception as e:
-                    logger.error(f"AI processing failed: {e}")
-
-            # Fallback if AI fails
-            return f"""I understand you experienced {harassment_type} from your driver. This is absolutely unacceptable and we take this very seriously.
+        return f"""I understand you experienced {analysis.replace('_', ' ')} from your driver. This is absolutely unacceptable and we take this very seriously.
 
 **Your situation has been escalated immediately.** Based on your description: "{query[:100]}{'...' if len(query) > 100 else ''}", we are taking the following actions:
 
@@ -469,7 +552,4 @@ Thank you for providing the details about your {harassment_type} incident.
 🆘 **Emergency Support Available 24/7:**
 - Grab Safety: 1-800-GRAB-HELP
 - Crisis Support: 1-800-273-8255
-- Case Reference: GC-HARASSMENT-{harassment_type.upper().replace(' ', '')}-001"""
-
-        # Default fallback
-        return "Please specify the harassment type to continue with your report."
+- Case Reference: GC-HARASSMENT-{analysis.upper()}-001"""

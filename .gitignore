@@ -6,29 +6,36 @@
 .env.production.local
 
 # Python
+# NOTE: the build-artifact directories below are deliberately anchored with a
+# leading "/" so they only match at the repo root. Unanchored, "lib/" also
+# matched frontend/src/lib/ and silently kept the UI's utils.ts + domain.js out
+# of git, which broke the Vercel build with an unresolvable import.
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-pip-wheel-metadata/
-share/python-wheels/
+/build/
+/develop-eggs/
+/dist/
+/downloads/
+/eggs/
+/.eggs/
+/lib/
+/lib64/
+/parts/
+/sdist/
+/var/
+/wheels/
+/pip-wheel-metadata/
+/share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
 MANIFEST
+
+# Frontend build output (Vercel builds this itself)
+frontend/build/
 
 # Virtual environments
 venv/

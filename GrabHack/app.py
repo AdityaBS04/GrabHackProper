@@ -9,13 +9,25 @@ from models import GrabService, Actor, ACTOR_ISSUE_MAPPING, SERVICE_ACTORS, Issu
 from cross_actor_service import CrossActorUpdateService
 import importlib
 
-# Load environment variables from parent directory
-load_dotenv(dotenv_path="../.env")
+# Load environment variables. Locally the keys live in ../.env; on a hosted
+# platform (Render) they come from the dashboard, where no .env file exists and
+# these calls are harmless no-ops.
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+load_dotenv(dotenv_path=os.path.join(BASE_DIR, os.pardir, ".env"))
+load_dotenv()
 
 app = Flask(__name__)
-CORS(app)
 
-DATABASE_PATH = 'grabhack.db'
+# Browser calls come from the Vercel frontend on a different origin, so the
+# allowed origins are configured per environment. Set CORS_ORIGINS to a
+# comma-separated list of URLs in production; "*" stays the local-dev default.
+_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "*").split(",") if o.strip()]
+CORS(app, resources={r"/api/*": {"origins": _origins or "*"}})
+
+# Absolute so the database resolves identically under `python app.py` and under
+# gunicorn, which need not share a working directory. DATABASE_PATH can point at
+# a mounted persistent disk in production.
+DATABASE_PATH = os.getenv('DATABASE_PATH', os.path.join(BASE_DIR, 'grabhack.db'))
 
 # Initialize cross-actor update service
 cross_actor_service = CrossActorUpdateService(DATABASE_PATH)
@@ -47,12 +59,17 @@ def init_database():
         )
     ''')
     
-    # Drop existing table and recreate with all required fields
-    cursor.execute('DROP TABLE IF EXISTS orders')
-    
+    # The orders table used to be dropped and rebuilt on every start, which wiped
+    # every real order each time the process restarted -- and a hosted backend
+    # restarts on each deploy and after idle spin-down. Seeding below is all
+    # INSERT OR IGNORE, so creating the table only when absent is idempotent and
+    # preserves live data. Set RESET_DEMO_DATA=1 to force the old reset.
+    if os.getenv('RESET_DEMO_DATA', '').lower() in ('1', 'true', 'yes'):
+        cursor.execute('DROP TABLE IF EXISTS orders')
+
     # Create orders table with coordinate-based location fields and update tracking
     cursor.execute('''
-        CREATE TABLE orders (
+        CREATE TABLE IF NOT EXISTS orders (
             id TEXT PRIMARY KEY,
             service TEXT NOT NULL,
             user_type TEXT NOT NULL,
@@ -390,6 +407,16 @@ def init_database():
     conn.commit()
     conn.close()
 
+@app.route('/api/health', methods=['GET'])
+def health():
+    """Liveness probe. Render pings this to tell a booted service from a hung one."""
+    return jsonify({
+        'status': 'ok',
+        'ai_engine': bool(os.getenv('GROQ_API_KEY')),
+        'maps': bool(os.getenv('GOOGLE_MAPS_API_KEY')),
+    })
+
+
 @app.route('/api/login', methods=['POST'])
 def login():
     """Handle user login with auto user type detection"""
@@ -529,7 +556,10 @@ def get_categories(service, user_type):
                 {'id': 'driver_harassment', 'name': 'Driver Harassment & Safety'},
                 {'id': 'app_booking_issues', 'name': 'App/Booking Issues'},
                 {'id': 'cancellation_refund', 'name': 'Cancellation/Refund Policy'},
-                {'id': 'airport_problems', 'name': 'Airport Booking Problems'}
+                {'id': 'airport_problems', 'name': 'Airport Booking Problems'},
+                {'id': 'fare_payment', 'name': 'Fare & Payment Issues'},
+                {'id': 'operational_issues', 'name': 'Pickup, Route & Communication'},
+                {'id': 'operational_problems', 'name': 'Driver Availability & Delays'}
             ]
         elif service_name == 'grab_cabs' and folder_name == 'driver':
             categories = [
@@ -609,7 +639,8 @@ def get_subissues(service, user_type, category_id):
                 sub_issues = [
                     {'id': 'handle_no_rides_during_peak_hours', 'name': 'No Rides During Peak Hours', 'description': 'Low ride allocation during busy times'},
                     {'id': 'handle_unfair_ride_allocation', 'name': 'Unfair Ride Allocation', 'description': 'Issues with ride distribution and fairness'},
-                    {'id': 'handle_incorrect_navigation_route', 'name': 'Incorrect Navigation/Route', 'description': 'GPS and navigation route problems'}
+                    {'id': 'handle_incorrect_navigation_route', 'name': 'Incorrect Navigation/Route', 'description': 'GPS and navigation route problems'},
+                    {'id': 'handle_route_change_notification', 'name': 'Route Change Notification', 'description': 'Report a route change and notify your passenger'}
                 ]
             
             return jsonify({'subissues': sub_issues})
@@ -639,6 +670,24 @@ def get_subissues(service, user_type, category_id):
             elif category_id == 'airport_problems':
                 sub_issues = [
                     {'id': 'handle_airport_booking_problems', 'name': 'Airport Booking Problems', 'description': 'Missed flights or incorrect sync issues'}
+                ]
+            elif category_id == 'fare_payment':
+                sub_issues = [
+                    {'id': 'handle_incorrect_multiple_fare_charged', 'name': 'Incorrect/Multiple Fare Charged', 'description': 'Overcharging, surge disputes, or duplicate fare charges'},
+                    {'id': 'handle_double_payment_cash_online', 'name': 'Double Payment (Cash & Online)', 'description': 'Charged online but the driver also collected cash'},
+                    {'id': 'handle_refund_adjustment_issues', 'name': 'Refund & Adjustment Issues', 'description': 'Refund not received, delayed, or for the wrong amount'}
+                ]
+            elif category_id == 'operational_issues':
+                sub_issues = [
+                    {'id': 'handle_pickup_drop_errors', 'name': 'Pickup/Drop Location Errors', 'description': 'Wrong pickup or drop location, or delayed pickup'},
+                    {'id': 'handle_route_problems', 'name': 'Route Problems', 'description': 'Longer route, wrong route, or an unauthorized detour'},
+                    {'id': 'handle_communication_issues', 'name': 'Driver Communication Issues', 'description': 'Driver unreachable, unresponsive, or a language barrier'}
+                ]
+            elif category_id == 'operational_problems':
+                sub_issues = [
+                    {'id': 'handle_driver_availability', 'name': 'No Drivers Available', 'description': 'Unable to find a driver in your area or at peak times'},
+                    {'id': 'handle_driver_cancellations', 'name': 'Driver Cancellations', 'description': 'Repeated or last-minute cancellations by drivers'},
+                    {'id': 'handle_late_arrivals_no_shows', 'name': 'Late Arrivals & No-Shows', 'description': 'Driver arrived very late or never arrived at all'}
                 ]
 
             return jsonify({'subissues': sub_issues})
@@ -1063,7 +1112,8 @@ def chat():
                 try:
                     from grab_cabs.driver.operational_problems import OperationalProblemsHandler
                     handler = OperationalProblemsHandler()
-                    response_text = handler.handle_incorrect_navigation_route(message)
+                    response_text = handler.handle_incorrect_navigation_route(
+                        message, username=session.get('username', 'anonymous'))
 
                     session['messages'].append({'role': 'assistant', 'content': response_text})
 
@@ -1357,7 +1407,7 @@ def chat():
                     print(f"Airport booking handler call failed: {e}")
                     # Fall through to AI engine processing
 
-            # Special handling for grab_cabs driver passenger harassment (hybrid workflow)
+            # Special handling for grab_cabs driver passenger harassment
             if (service == 'grab_cabs' and user_type == 'driver' and
                 category == 'customer_experience' and sub_issue == 'handle_passenger_harassment_complaint'):
 
@@ -1365,75 +1415,32 @@ def chat():
                     from grab_cabs.driver.customer_experience import CustomerExperienceHandler
                     handler = CustomerExperienceHandler()
 
-                    # Determine workflow stage and harassment type
+                    # Detect harassment type keyword from message if provided
                     harassment_type = None
-                    workflow_stage = "initial"
-
-                    # Check if this is a harassment type selection
                     message_lower = message.lower()
                     if 'threats' in message_lower:
                         harassment_type = 'Threats'
-                        workflow_stage = "type_selected"
                     elif 'verbal abuse' in message_lower:
                         harassment_type = 'Verbal Abuse'
-                        workflow_stage = "type_selected"
                     elif 'physical abuse' in message_lower:
                         harassment_type = 'Physical Abuse'
-                        workflow_stage = "type_selected"
                     elif 'stalking' in message_lower:
                         harassment_type = 'Stalking'
-                        workflow_stage = "type_selected"
                     elif 'inappropriate' in message_lower:
                         harassment_type = 'Inappropriate Behaviour'
-                        workflow_stage = "type_selected"
-                    else:
-                        # Check if user already selected a type and is now providing description
-                        prev_messages = session.get('messages', [])
-                        for prev_msg in reversed(prev_messages):
-                            if prev_msg.get('role') == 'assistant' and 'harassment report -' in prev_msg.get('content', '').lower():
-                                # Extract harassment type from previous message
-                                content = prev_msg.get('content', '')
-                                if 'Threats' in content:
-                                    harassment_type = 'Threats'
-                                elif 'Verbal Abuse' in content:
-                                    harassment_type = 'Verbal Abuse'
-                                elif 'Physical Abuse' in content:
-                                    harassment_type = 'Physical Abuse'
-                                elif 'Stalking' in content:
-                                    harassment_type = 'Stalking'
-                                elif 'Inappropriate Behaviour' in content:
-                                    harassment_type = 'Inappropriate Behaviour'
-
-                                if harassment_type:
-                                    # Check if user wants to upload photo or said no evidence
-                                    if 'photo' in message.lower() or 'image' in message.lower() or 'evidence' in message.lower():
-                                        if 'no evidence' in message.lower():
-                                            workflow_stage = "ai_processing"
-                                        else:
-                                            workflow_stage = "image_request"
-                                    else:
-                                        # After text description, show image request
-                                        workflow_stage = "image_request"
-                                break
 
                     response_text = handler.handle_passenger_harassment_complaint(
                         query=message,
                         harassment_type=harassment_type,
-                        workflow_stage=workflow_stage
+                        image_data=None,
+                        username=username,
                     )
 
                     session['messages'].append({'role': 'assistant', 'content': response_text})
 
-                    # Store harassment_type in session for image processing
-                    if harassment_type:
-                        session['harassment_type'] = harassment_type
-
-                    # Set requires_image to True when showing image upload prompt
-                    requires_image = workflow_stage == "image_request"
-
                     return jsonify({
                         'response': response_text,
-                        'requires_image': requires_image,
+                        'requires_image': False,
                         'conversation_id': conversation_id
                     })
                 except Exception as e:
@@ -1809,6 +1816,21 @@ def generate_ai_solution(complaint_data):
             }
             actual_file = category_file_mapping.get(category_handler, category_handler)
             module_path = f"{service}.{user_type_folder}.{actual_file}"
+        elif service == 'grab_cabs' and user_type == 'customer':
+            # Cabs customer category ids are UI labels, not file names — map them to the
+            # handler modules that actually implement each workflow
+            category_file_mapping = {
+                'ride_experience_handler': 'driver_vehicle_issues',
+                'driver_harassment': 'customer_experience',
+                'app_booking_issues': 'customer_experience',
+                'cancellation_refund': 'customer_experience',
+                'airport_problems': 'customer_experience',
+                'fare_payment': 'fare_payment',
+                'operational_issues': 'operational_issues',
+                'operational_problems': 'operational_problems'
+            }
+            actual_file = category_file_mapping.get(category_handler, category_handler)
+            module_path = f"{service}.{user_type_folder}.{actual_file}"
         else:
             module_path = f"{service}.{user_type_folder}.{category_handler}"
         
@@ -2026,6 +2048,16 @@ def get_orders_with_updates(user_type, username):
     finally:
         conn.close()
 
+# Run at import time so the schema exists under gunicorn, which never executes
+# the __main__ block below.
+init_database()
+
 if __name__ == '__main__':
-    init_database()
-    app.run(debug=True, host='0.0.0.0', port=8000)
+    # Local development only. In production gunicorn serves `app:app`, and the
+    # Werkzeug reloader/debugger must stay off there -- the debug console is
+    # remote code execution for anyone who can reach it.
+    app.run(
+        debug=os.getenv('FLASK_DEBUG', '1').lower() in ('1', 'true', 'yes'),
+        host='0.0.0.0',
+        port=int(os.getenv('PORT', 8000)),
+    )

@@ -148,12 +148,12 @@ class NavigationLocationHandler:
             return self.handle_general_navigation_help(query, image_data)
 
     def handle_incorrect_address(self, query: str, image_data: Optional[str] = None) -> str:
-        """Handle incorrect customer address with practical solutions and Google Maps verification"""
+        """Handle incorrect customer address with practical solutions and Google Maps verification — 4-step workflow"""
 
-        # Extract address from query if possible
+        # Step 1: Extract address from the agent's query
         address = self._extract_address_from_query(query)
 
-        # Verify address using Google Maps API
+        # Step 2: Verify address using Google Maps API and generate navigation link
         verification_info = ""
         maps_navigation_link = ""
 
@@ -216,13 +216,13 @@ class NavigationLocationHandler:
 **Support:** Call delivery support at any time for address verification assistance."""
 
     def handle_gps_app_issues(self, query: str, image_data: Optional[str] = None) -> str:
-        """Handle GPS and navigation app technical problems with Google Maps backup"""
+        """Handle GPS and navigation app technical problems with Google Maps backup — 3-step workflow"""
 
-        # Extract locations if mentioned in query
+        # Step 1: Extract current location and destination from the agent's query
         current_location = self._extract_current_location_from_query(query)
         destination = self._extract_destination_from_query(query)
 
-        # Generate backup navigation links
+        # Step 2: Generate backup navigation links and static offline map reference
         backup_navigation = ""
         static_map_backup = ""
 
@@ -249,6 +249,7 @@ class NavigationLocationHandler:
 
 """
 
+        # Step 3: Return GPS troubleshooting steps and backup navigation response
         return f"""📱 **GPS & Navigation App Fix**
 
 {backup_navigation}{static_map_backup}**Immediate Troubleshooting:**
@@ -286,12 +287,12 @@ class NavigationLocationHandler:
 🔧 Report app crashes immediately for faster resolution"""
 
     def handle_location_difficulty(self, query: str, image_data: Optional[str] = None) -> str:
-        """Handle difficulty finding customer's specific location with Google Maps assistance"""
+        """Handle difficulty finding customer's specific location with Google Maps assistance — 3-step workflow"""
 
-        # Extract location details from query
+        # Step 1: Extract address details from the agent's query
         address = self._extract_address_from_query(query)
 
-        # Generate helpful navigation resources
+        # Step 2: Look up address in Google Maps and generate navigation assistance link
         location_assistance = ""
 
         if address:
@@ -309,6 +310,7 @@ class NavigationLocationHandler:
 
 """
 
+        # Step 3: Generate comprehensive location-finding guidance and resources
         return f"""🔍 **Location Finding Assistance**
 
 {location_assistance}**Smart Search Strategy:**
@@ -348,13 +350,13 @@ class NavigationLocationHandler:
 - Area marking for future delivery reference"""
 
     def handle_traffic_rerouting(self, query: str, image_data: Optional[str] = None) -> str:
-        """Handle traffic delays and provide rerouting solutions with Google Maps real-time data"""
+        """Handle traffic delays and provide rerouting solutions with Google Maps real-time data — 3-step workflow"""
 
-        # Extract locations from query
+        # Step 1: Extract current location and destination from the agent's query
         current_location = self._extract_current_location_from_query(query)
         destination = self._extract_destination_from_query(query)
 
-        # Get real-time traffic information if locations available
+        # Step 2: Get real-time route and traffic information via Google Maps API
         traffic_info = ""
         route_alternatives = ""
 
@@ -381,6 +383,7 @@ class NavigationLocationHandler:
 
 """
 
+        # Step 3: Generate traffic solutions and rerouting guidance for the agent
         return f"""🚦 **Traffic & Rerouting Solutions**
 
 {traffic_info}{route_alternatives}**Immediate Rerouting:**
@@ -426,8 +429,9 @@ class NavigationLocationHandler:
 📱 Multi-App Strategy: Use 2-3 navigation apps to compare routes"""
 
     def handle_general_navigation_help(self, query: str, image_data: Optional[str] = None) -> str:
-        """General navigation assistance and tips with Google Maps integration"""
+        """General navigation assistance and tips with Google Maps integration — 1-step workflow"""
 
+        # Step 1: Generate comprehensive navigation best practices and Google Maps API feature guidance
         return """🧭 **General Navigation Support**
 
 **Navigation Best Practices:**

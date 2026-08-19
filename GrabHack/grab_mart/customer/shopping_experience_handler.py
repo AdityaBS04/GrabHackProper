@@ -10,7 +10,7 @@ from typing import Optional
 
 # Add parent directory to path to import enhanced_ai_engine
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-from enhanced_ai_engine import EnhancedAgenticAIEngine
+from enhanced_ai_engine_fixed import EnhancedAgenticAIEngine
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +22,11 @@ class CustomerShoppingExperienceHandler:
         self.service = "grab_mart"
         self.actor = "customer"
         self.handler_type = "shopping_experience_handler"
-        self.ai_engine = EnhancedAgenticAIEngine()
+        try:
+            self.ai_engine = EnhancedAgenticAIEngine()
+        except Exception as e:
+            logger.warning(f"AI engine initialization failed: {e}")
+            self.ai_engine = None
 
     def handle_customer_product_quality(self, query: str, image_data: Optional[str] = None, username: str = "anonymous") -> str:
         """Handle customer product quality complaints and freshness issues with strict 7-step workflow - IMAGE REQUIRED"""
@@ -300,7 +304,8 @@ class CustomerShoppingExperienceHandler:
                 AND created_at >= datetime('now', '-30 days')
             ''', (username,))
 
-            recent_complaints = cursor.fetchone()[0] if cursor.fetchone() else 0
+            row = cursor.fetchone()
+            recent_complaints = row[0] if row else 0
             if recent_complaints > 5:
                 base_score -= 2
             elif recent_complaints > 2:

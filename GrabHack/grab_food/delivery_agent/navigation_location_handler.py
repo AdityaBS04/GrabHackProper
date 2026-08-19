@@ -199,13 +199,13 @@ class NavigationLocationHandler:
             return self.handle_general_navigation(query, image_data, order_details)
 
     def handle_traffic_rerouting(self, query: str, image_data: Optional[str] = None, order_details: Optional[Dict] = None) -> str:
-        """Handle traffic issues and provide rerouting with Google Maps API"""
+        """Handle traffic issues and provide rerouting with Google Maps API — 5-step workflow"""
 
-        # Extract locations from query, order details, or use defaults
+        # Step 1: Extract current location and destination from query or order details
         current_location = self._extract_current_location(query)
         destination = self._extract_destination(query)
 
-        # Use order details if available and locations not found in query
+        # Step 2: Enrich location data from order details if not found in query
         if order_details:
             if not current_location:
                 current_location = order_details.get('start_location') or order_details.get('restaurant_name')
@@ -216,10 +216,10 @@ class NavigationLocationHandler:
         current_location = current_location or self.default_current_location
         destination = destination or self.default_destination
 
-        # Get real-time directions using Google Maps API
+        # Step 3: Get real-time directions using Google Maps API
         directions_result = self.maps_api.get_directions(current_location, destination)
 
-        # Generate navigation links
+        # Step 4: Generate navigation links for Google Maps and Waze
         maps_link = self._generate_google_maps_navigation_link(current_location, destination)
         waze_link = self._generate_waze_navigation_link(current_location, destination)
 
@@ -266,13 +266,13 @@ class NavigationLocationHandler:
 **💡 Pro Tip:** Save both links for easy access during delivery!"""
 
     def handle_address_issues(self, query: str, image_data: Optional[str] = None, order_details: Optional[Dict] = None) -> str:
-        """Handle incorrect or unclear addresses with Google Maps API verification"""
+        """Handle incorrect or unclear addresses with Google Maps API verification — 5-step workflow"""
 
-        # Extract locations from query, order details, or use defaults
+        # Step 1: Extract locations from query and order details
         current_location = self._extract_current_location(query)
         destination = self._extract_destination(query)
 
-        # Use order details if available
+        # Step 2: Enrich with order details and build order info summary
         order_info = ""
         if order_details:
             if not current_location:
@@ -285,9 +285,10 @@ class NavigationLocationHandler:
         current_location = current_location or self.default_current_location
         destination = destination or self.default_destination
 
-        # Verify address using Google Maps API
+        # Step 3: Verify address using Google Maps geocoding API
         address_verification = self.maps_api.geocode_address(destination)
 
+        # Step 4: Generate navigation link for verified address
         maps_link = self._generate_google_maps_navigation_link(current_location, destination)
 
         # Address verification information
@@ -339,11 +340,13 @@ class NavigationLocationHandler:
 **🆘 Escalation:** If address cannot be resolved in 15 minutes, contact customer support for assistance."""
 
     def handle_gps_issues(self, query: str, image_data: Optional[str] = None, order_details: Optional[Dict] = None) -> str:
-        """Handle GPS and navigation app technical problems"""
+        """Handle GPS and navigation app technical problems — 4-step workflow"""
 
+        # Step 1: Extract current location and destination from query
         current_location = self._extract_current_location(query) or self.default_current_location
         destination = self._extract_destination(query) or self.default_destination
 
+        # Step 2: Generate fallback navigation links for alternative apps
         maps_link = self._generate_google_maps_navigation_link(current_location, destination)
         waze_link = self._generate_waze_navigation_link(current_location, destination)
 
@@ -768,28 +771,6 @@ class NavigationLocationHandler:
             "maps_api_integration": True,
             "next_action_required": not verification["success"]
         }
-
-    # ... [Keep all other existing methods unchanged] ...
-
-    # Common helper methods
-    async def _execute_address_verification(self, context: NavigationContext, analysis: Dict[str, Any]) -> List[str]:
-        """Execute address verification steps"""
-        actions = []
-
-        if analysis.get("CUSTOMER_COOPERATION_NEEDED") == "true":
-            customer_verification = await self._contact_customer_for_verification(context)
-            actions.append(f"customer_verification: {customer_verification}")
-
-        # Cross-reference with mapping services
-        mapping_verification = await self._verify_with_mapping_services(context)
-        actions.append(f"mapping_verification: {mapping_verification}")
-
-        # GPS coordinate validation
-        if context.gps_coordinates:
-            gps_validation = await self._validate_gps_coordinates(context.gps_coordinates, context.target_address)
-            actions.append(f"gps_validation: {gps_validation}")
-
-        return actions
 
     async def _contact_customer_for_verification(self, context: NavigationContext) -> str:
         """Contact customer for address verification"""

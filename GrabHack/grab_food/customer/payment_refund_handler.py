@@ -10,21 +10,23 @@ from typing import Optional
 
 # Add parent directory to path to import enhanced_ai_engine
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-# Temporarily comment out AI engine import to test basic functionality
-# from enhanced_ai_engine_fixed import EnhancedAgenticAIEngine
+from enhanced_ai_engine_fixed import EnhancedAgenticAIEngine
 
 logger = logging.getLogger(__name__)
 
 
 class PaymentRefundHandler:
     """Customer-focused payment and refund management with real AI"""
-    
+
     def __init__(self, groq_api_key: str = None):
         self.service = "grab_food"
         self.actor = "customer"
         self.handler_type = "payment_refund_handler"
-        # Initialize AI engine later to avoid import issues
-        self.ai_engine = None
+        try:
+            self.ai_engine = EnhancedAgenticAIEngine()
+        except Exception as e:
+            logger.warning(f"AI engine initialization failed: {e}")
+            self.ai_engine = None
         
     def handle_double_charge(self, query: str, image_data: Optional[str] = None, username: str = "anonymous") -> str:
         """Handle double charge for single order with strict 6-step workflow - TEXT ONLY"""
@@ -275,7 +277,8 @@ class PaymentRefundHandler:
                 AND created_at >= datetime('now', '-30 days')
             ''', (username,))
 
-            recent_complaints = cursor.fetchone()[0] if cursor.fetchone() else 0
+            row = cursor.fetchone()
+            recent_complaints = row[0] if row else 0
             if recent_complaints > 5:
                 base_score -= 2
             elif recent_complaints > 2:

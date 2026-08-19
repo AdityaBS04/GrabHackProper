@@ -502,7 +502,8 @@ class RestaurantHandler:
                 AND created_at >= datetime('now', '-30 days')
             ''', (restaurant_id,))
 
-            violations_30_days = cursor.fetchone()[0] if cursor.fetchone() else 0
+            row = cursor.fetchone()
+            violations_30_days = row[0] if row else 0
             history_data["violation_count_30_days"] = violations_30_days
 
             # Get portion violation complaints in last 90 days
@@ -514,7 +515,8 @@ class RestaurantHandler:
                 AND created_at >= datetime('now', '-90 days')
             ''', (restaurant_id,))
 
-            violations_90_days = cursor.fetchone()[0] if cursor.fetchone() else 0
+            row = cursor.fetchone()
+            violations_90_days = row[0] if row else 0
             history_data["violation_count_90_days"] = violations_90_days
 
             # Determine pattern type based on violation frequency
@@ -1126,7 +1128,8 @@ Consistent portion standards are essential for customer satisfaction and your re
                 AND created_at >= datetime('now', '-30 days')
             ''', (restaurant_id,))
 
-            violations_30_days = cursor.fetchone()[0] if cursor.fetchone() else 0
+            row = cursor.fetchone()
+            violations_30_days = row[0] if row else 0
             history_data["violation_count_30_days"] = violations_30_days
 
             # Get food safety violation complaints in last 90 days
@@ -1140,7 +1143,8 @@ Consistent portion standards are essential for customer satisfaction and your re
                 AND created_at >= datetime('now', '-90 days')
             ''', (restaurant_id,))
 
-            violations_90_days = cursor.fetchone()[0] if cursor.fetchone() else 0
+            row = cursor.fetchone()
+            violations_90_days = row[0] if row else 0
             history_data["violation_count_90_days"] = violations_90_days
 
             # Get critical safety violations (food poisoning, hospitalization)
@@ -1153,7 +1157,8 @@ Consistent portion standards are essential for customer satisfaction and your re
                 AND created_at >= datetime('now', '-90 days')
             ''', (restaurant_id,))
 
-            critical_violations = cursor.fetchone()[0] if cursor.fetchone() else 0
+            row = cursor.fetchone()
+            critical_violations = row[0] if row else 0
             history_data["critical_violations_count"] = critical_violations
 
             # Determine pattern type based on violation frequency and severity

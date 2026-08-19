@@ -5,6 +5,7 @@ Payment settlement not reflecting in driver app
 """
 
 import asyncio
+import logging
 from datetime import datetime, timedelta
 from typing import Optional, Dict, List, Any, Tuple
 from dataclasses import dataclass
@@ -13,6 +14,8 @@ import base64
 import json
 
 from groq import AsyncGroq
+
+logger = logging.getLogger(__name__)
 
 
 class TechnicalIssueType(Enum):
@@ -756,7 +759,8 @@ class TechnicalHandler:
                 AND created_at >= datetime('now', '-30 days')
             ''', (agent_id,))
 
-            recent_tech_complaints = cursor.fetchone()[0] if cursor.fetchone() else 0
+            row = cursor.fetchone()
+            recent_tech_complaints = row[0] if row else 0
             if recent_tech_complaints > 3:
                 base_score -= 2
             elif recent_tech_complaints > 1:

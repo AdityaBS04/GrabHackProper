@@ -10,7 +10,7 @@ from typing import Optional
 
 # Add parent directory to path to import enhanced_ai_engine
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-from enhanced_ai_engine import EnhancedAgenticAIEngine
+from enhanced_ai_engine_fixed import EnhancedAgenticAIEngine
 
 logger = logging.getLogger(__name__)
 

@@ -15,8 +15,17 @@ logger = logging.getLogger(__name__)
 try:
     from ..api_integrations import WeatherAPI, GoogleMapsAPI, LocationData
 except ImportError:
-    # Fallback import path
-    from ...api_integrations import WeatherAPI, GoogleMapsAPI, LocationData
+    try:
+        from ...api_integrations import WeatherAPI, GoogleMapsAPI, LocationData
+    except ImportError:
+        class WeatherAPI:
+            async def get_weather(self, *a, **kw): return {}
+
+        class GoogleMapsAPI:
+            async def get_route(self, *a, **kw): return {}
+
+        class LocationData:
+            def __init__(self, latitude=1.3521, longitude=103.8198, address=""): pass
 
 # Import cross-actor service
 import sys
@@ -517,7 +526,8 @@ class DarkStoreHandler:
                 AND created_at >= datetime('now', '-30 days')
             ''', (store_id,))
 
-            violations_30_days = cursor.fetchone()[0] if cursor.fetchone() else 0
+            row = cursor.fetchone()
+            violations_30_days = row[0] if row else 0
             history_data["violation_count_30_days"] = violations_30_days
 
             # Get product quality violation complaints in last 90 days
@@ -530,7 +540,8 @@ class DarkStoreHandler:
                 AND created_at >= datetime('now', '-90 days')
             ''', (store_id,))
 
-            violations_90_days = cursor.fetchone()[0] if cursor.fetchone() else 0
+            row = cursor.fetchone()
+            violations_90_days = row[0] if row else 0
             history_data["violation_count_90_days"] = violations_90_days
 
             # Determine pattern type based on violation frequency

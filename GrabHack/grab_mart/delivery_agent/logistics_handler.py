@@ -13,7 +13,27 @@ import base64
 import json
 
 from groq import AsyncGroq
-from ...api_integrations import GoogleMapsAPI, WeatherAPI, PredictiveAnalytics, LocationData
+try:
+    from ...api_integrations import GoogleMapsAPI, WeatherAPI, PredictiveAnalytics, LocationData
+except ImportError:
+    from dataclasses import dataclass as _dc
+
+    @_dc
+    class LocationData:
+        latitude: float = 1.3521
+        longitude: float = 103.8198
+        address: str = ""
+
+    class GoogleMapsAPI:
+        async def get_route(self, *a, **kw): return {}
+
+    class WeatherAPI:
+        async def get_weather(self, *a, **kw): return {}
+
+    class PredictiveAnalytics:
+        def __init__(self, *a, **kw): pass
+        async def predict_delivery_delay(self, *a, **kw): return {"delay_minutes": 0}
+        async def optimize_delivery_route(self, *a, **kw): return {"route": []}
 
 
 class LogisticsIssueType(Enum):
@@ -97,14 +117,14 @@ class LogisticsHandler:
             return {"error": "Unknown logistics issue type"}
     
     async def _handle_traffic_delays(self, context: LogisticsContext) -> Dict[str, Any]:
-        """Handle traffic delay situations with real-time API data"""
-        
-        # Parse location data for API calls
+        """Handle traffic delay situations with real-time API data — 6-step workflow"""
+
+        # Step 1: Parse location data from context for API calls
         origin_location = self._parse_location(context.current_location)
-        destination_locations = [self._parse_location(order.get('delivery_address', '')) 
+        destination_locations = [self._parse_location(order.get('delivery_address', ''))
                                for order in context.orders_remaining]
-        
-        # Get real-time predictions and analysis
+
+        # Step 2: Get real-time delay predictions and route optimization from APIs
         api_predictions = []
         for dest in destination_locations:
             if dest:
@@ -115,20 +135,18 @@ class LogisticsHandler:
                     'prediction': prediction,
                     'route_optimization': route_optimization
                 })
-        
-        # Analyze traffic situation with API data
+
+        # Step 3: Analyze traffic situation using combined API data
         traffic_analysis = await self._analyze_traffic_situation_with_api(context, api_predictions)
-        
-        # Enhanced route optimization using real-time data
+
+        # Step 4: Optimize delivery routes based on real-time traffic data
         route_optimization = await self._optimize_routes_for_traffic(context, traffic_analysis, api_predictions)
-        
-        # Customer communication with accurate predictions
+
+        # Step 5: Communicate traffic delays to customers with accurate predictions
         customer_communication = await self._communicate_traffic_delays(context, traffic_analysis)
-        
-        # Performance protection
+
+        # Step 6: Apply performance protection and explore alternative solutions
         performance_protection = await self._apply_traffic_performance_protection(context, traffic_analysis)
-        
-        # Alternative solutions with API recommendations
         alternative_solutions = await self._explore_traffic_alternatives(context, traffic_analysis, api_predictions)
         
         return {
@@ -328,65 +346,22 @@ class LogisticsHandler:
         
         return alternatives
     
-    async def _analyze_traffic_situation(self, context: LogisticsContext) -> Dict[str, Any]:
-        """Analyze traffic delay situation using AI"""
-        
-        analysis_prompt = f"""
-        Analyze this traffic delay situation:
-        
-        Current Location: {context.current_location}
-        Estimated Delay: {context.estimated_delay} minutes
-        Orders Remaining: {context.orders_remaining}
-        Weather Conditions: {context.weather_conditions or 'normal'}
-        Traffic Conditions: {context.traffic_conditions or 'unknown'}
-        Time of Day: {datetime.now().strftime('%H:%M')}
-        
-        Provide analysis in this exact format:
-        TRAFFIC_SEVERITY: [LIGHT/MODERATE/HEAVY/GRIDLOCK]
-        DELAY_CATEGORY: [EXPECTED/UNEXPECTED/EXCEPTIONAL]
-        ROUTE_ALTERNATIVES_AVAILABLE: [true/false]
-        CUSTOMER_IMPACT_LEVEL: [LOW/MEDIUM/HIGH]
-        PERFORMANCE_IMPACT_SCORE: [0.0-1.0]
-        RECOMMENDED_ACTIONS: [comma-separated list]
-        RESOLUTION_ETA: [minutes]
-        """
-        
-        try:
-            if context.evidence_image:
-                image_analysis = await self._analyze_traffic_evidence(context.evidence_image, context)
-                analysis_prompt += f"\n\nTraffic Image Evidence: {image_analysis}"
-            
-            response = await self.groq_client.chat.completions.create(
-                model="llama-3.1-70b-versatile",
-                messages=[
-                    {"role": "system", "content": "You are an expert in traffic analysis and delivery logistics optimization."},
-                    {"role": "user", "content": analysis_prompt}
-                ],
-                temperature=0.1,
-                max_tokens=800
-            )
-            
-            return self._parse_ai_analysis(response.choices[0].message.content)
-            
-        except Exception as e:
-            return self._create_fallback_traffic_analysis(context)
-    
     async def _handle_vehicle_breakdown(self, context: LogisticsContext) -> Dict[str, Any]:
-        """Handle vehicle breakdown situations"""
-        
-        # Diagnose vehicle issue
+        """Handle vehicle breakdown situations — 5-step workflow"""
+
+        # Step 1: Diagnose vehicle issue type and severity
         vehicle_diagnosis = await self._diagnose_vehicle_issue(context)
-        
-        # Emergency response if needed
+
+        # Step 2: Coordinate emergency response if safety risk detected
         emergency_response = await self._coordinate_breakdown_emergency_response(context, vehicle_diagnosis)
-        
-        # Repair/replacement solutions
+
+        # Step 3: Get repair or replacement vehicle solutions
         repair_solutions = await self._coordinate_vehicle_repair_replacement(context, vehicle_diagnosis)
-        
-        # Order transfer protocols
+
+        # Step 4: Coordinate order transfer to backup delivery agent
         order_transfer = await self._coordinate_order_transfer(context, vehicle_diagnosis)
-        
-        # Compensation and support
+
+        # Step 5: Provide compensation and ongoing agent support
         agent_support = await self._provide_breakdown_agent_support(context, vehicle_diagnosis)
         
         return {
@@ -443,24 +418,24 @@ class LogisticsHandler:
             return self._create_fallback_vehicle_diagnosis(context)
     
     async def _handle_safety_accident(self, context: LogisticsContext) -> Dict[str, Any]:
-        """Handle safety incidents and accidents - CRITICAL PRIORITY"""
-        
-        # Immediate safety assessment
+        """Handle safety incidents and accidents - CRITICAL PRIORITY — 6-step workflow"""
+
+        # Step 1: Immediately assess safety incident severity and type
         safety_assessment = await self._assess_safety_incident(context)
-        
-        # Emergency services coordination
+
+        # Step 2: Coordinate emergency services based on severity
         emergency_coordination = await self._coordinate_emergency_services(context, safety_assessment)
-        
-        # Medical/safety support
+
+        # Step 3: Provide medical and safety support to agent
         medical_support = await self._provide_medical_safety_support(context, safety_assessment)
-        
-        # Order management during emergency
+
+        # Step 4: Manage affected orders during emergency
         emergency_order_management = await self._manage_orders_during_emergency(context, safety_assessment)
-        
-        # Insurance and documentation
+
+        # Step 5: Document incident for insurance and records
         incident_documentation = await self._document_safety_incident(context, safety_assessment)
-        
-        # Agent welfare and support
+
+        # Step 6: Provide agent welfare and ongoing post-incident support
         agent_welfare = await self._provide_emergency_agent_support(context, safety_assessment)
         
         return {
@@ -520,21 +495,21 @@ class LogisticsHandler:
             return self._create_critical_safety_fallback(context)
     
     async def _handle_order_batching_confusion(self, context: LogisticsContext) -> Dict[str, Any]:
-        """Handle multiple order batching confusion"""
-        
-        # Analyze batching issue
+        """Handle multiple order batching confusion — 5-step workflow"""
+
+        # Step 1: Analyze the batching confusion type and root cause
         batching_analysis = await self._analyze_batching_confusion(context)
-        
-        # Order verification and sorting
+
+        # Step 2: Verify and sort all orders to correct customer mapping
         order_verification = await self._verify_and_sort_orders(context, batching_analysis)
-        
-        # Customer communication management
+
+        # Step 3: Manage communications with all affected customers
         customer_management = await self._manage_multiple_customer_communications(context, batching_analysis)
-        
-        # Route re-optimization
+
+        # Step 4: Re-optimize delivery routes for remaining orders
         route_reoptimization = await self._reoptimize_delivery_routes(context, batching_analysis)
-        
-        # Performance protection
+
+        # Step 5: Apply performance protection for system-caused batching error
         performance_protection = await self._apply_batching_performance_protection(context, batching_analysis)
         
         return {
@@ -547,22 +522,6 @@ class LogisticsHandler:
             "status": "handled",
             "timestamp": datetime.now().isoformat()
         }
-    
-    # Implementation of key methods
-    async def _optimize_routes_for_traffic(self, context: LogisticsContext, analysis: Dict[str, Any]) -> List[str]:
-        """Optimize routes to avoid traffic"""
-        optimizations = []
-        
-        if analysis.get("ROUTE_ALTERNATIVES_AVAILABLE") == "true":
-            optimizations.append("alternative_route_calculated")
-            optimizations.append("traffic_pattern_analysis_applied")
-        
-        if context.orders_remaining > 1:
-            optimizations.append("delivery_sequence_reordered")
-            optimizations.append("customer_proximity_optimization")
-        
-        optimizations.append("real_time_traffic_monitoring_enabled")
-        return optimizations
     
     async def _communicate_traffic_delays(self, context: LogisticsContext, analysis: Dict[str, Any]) -> Dict[str, Any]:
         """Communicate traffic delays to customers"""

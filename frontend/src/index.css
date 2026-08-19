@@ -1,0 +1,163 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+
+    /* shadcn's token contract, pointed at this project's palette so dropped-in
+       components inherit the desk/panel/parchment design instead of shipping
+       their own grey theme. */
+    --background: 0 0% 100%;
+    --foreground: 210 38% 13%;
+    --card: 0 0% 100%;
+    --card-foreground: 210 38% 13%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 210 38% 13%;
+    --primary: 35 80% 57%;
+    --primary-foreground: 210 38% 13%;
+    --secondary: 213 33% 95%;
+    --secondary-foreground: 210 38% 13%;
+    --muted: 213 33% 95%;
+    --muted-foreground: 208 13% 38%;
+    --accent: 204 38% 97%;
+    --accent-foreground: 210 38% 13%;
+    --destructive: 15 62% 39%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 210 24% 84%;
+    --input: 210 24% 84%;
+    --ring: 35 90% 28%;
+    --radius: 3px;
+  }
+
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: theme("colors.desk.DEFAULT");
+    color: theme("colors.ink");
+    font-family: theme("fontFamily.sans");
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Daylight across the desk: cool from the window, a little warmth where the
+     paper sits. Static, so it never competes with the content. */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background:
+      radial-gradient(
+        70rem 46rem at 6% -8%,
+        rgba(255, 255, 255, 0.85),
+        transparent 62%
+      ),
+      radial-gradient(
+        54rem 40rem at 98% 2%,
+        rgba(233, 161, 59, 0.1),
+        transparent 60%
+      );
+  }
+
+  ::selection {
+    background: theme("colors.amber.DEFAULT");
+    color: theme("colors.ink");
+  }
+
+  :focus-visible {
+    outline: 2px solid theme("colors.amber.deep");
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  /* Scrollbars read as part of the instrument, not the OS. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: theme("colors.line.strong") transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: theme("colors.line.strong");
+    border: 3px solid transparent;
+    background-clip: content-box;
+    border-radius: 99px;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: #9dadbc;
+    background-clip: content-box;
+  }
+}
+
+@layer components {
+  /* Signage lettering: the small all-caps labels that run the console. */
+  .signage {
+    @apply font-mono text-[10px] uppercase tracking-signage text-faint;
+  }
+
+  .panel {
+    @apply rounded-card border border-line bg-panel shadow-panel;
+  }
+
+  /* A record. Warm stock lying on the cool desk — the brightest surface here,
+     lifted by its own shadow. */
+  .paper {
+    @apply rounded-card text-parchment-ink shadow-paper;
+    background-image: linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 0.4),
+        rgba(255, 255, 255, 0) 74px
+      ),
+      linear-gradient(
+        theme("colors.parchment.DEFAULT"),
+        theme("colors.parchment.DEFAULT")
+      );
+    border: 1px solid theme("colors.parchment.edge");
+  }
+
+  /* The perforated tear line where a waybill's filing stub detaches. */
+  .perforation-y {
+    background-image: repeating-linear-gradient(
+      to bottom,
+      theme("colors.parchment.edge") 0 4px,
+      transparent 4px 9px
+    );
+  }
+
+  .perforation-x {
+    background-image: repeating-linear-gradient(
+      to right,
+      theme("colors.parchment.edge") 0 4px,
+      transparent 4px 9px
+    );
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

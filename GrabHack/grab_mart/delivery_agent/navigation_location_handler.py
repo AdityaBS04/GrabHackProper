@@ -199,13 +199,13 @@ class NavigationLocationHandler:
             return self.handle_general_navigation(query, image_data, order_details)
 
     def handle_traffic_rerouting(self, query: str, image_data: Optional[str] = None, order_details: Optional[Dict] = None) -> str:
-        """Handle traffic issues and provide rerouting with Google Maps API"""
+        """Handle traffic issues and provide rerouting with Google Maps API — 5-step workflow"""
 
-        # Extract locations from query, order details, or use defaults
+        # Step 1: Extract current location and destination from query
         current_location = self._extract_current_location(query)
         destination = self._extract_destination(query)
 
-        # Use order details if available and locations not found in query
+        # Step 2: Enrich location data from order details if not found in query
         if order_details:
             if not current_location:
                 current_location = order_details.get('start_location') or order_details.get('store_name')
@@ -216,7 +216,7 @@ class NavigationLocationHandler:
         current_location = current_location or self.default_current_location
         destination = destination or self.default_destination
 
-        # Get real-time directions using Google Maps API
+        # Step 3: Get real-time directions using Google Maps API
         directions_result = self.maps_api.get_directions(current_location, destination)
 
         # Generate navigation links
@@ -266,13 +266,12 @@ class NavigationLocationHandler:
 **💡 Pro Tip:** Save both links for easy access during delivery!"""
 
     def handle_address_issues(self, query: str, image_data: Optional[str] = None, order_details: Optional[Dict] = None) -> str:
-        """Handle incorrect or unclear addresses with Google Maps API verification"""
+        """Handle incorrect or unclear addresses with Google Maps API verification — 4-step workflow"""
 
-        # Extract locations from query, order details, or use defaults
+        # Step 1: Extract current location and destination from query or order details
         current_location = self._extract_current_location(query)
         destination = self._extract_destination(query)
 
-        # Use order details if available
         order_info = ""
         if order_details:
             if not current_location:
@@ -281,16 +280,16 @@ class NavigationLocationHandler:
                 destination = order_details.get('end_location')
             order_info = f"\n**📋 Order Info:**\n- Order ID: {order_details.get('order_id', 'N/A')}\n- Store: {order_details.get('store_name', 'N/A')}\n- Payment: {order_details.get('payment_method', 'N/A')}\n"
 
-        # Fall back to defaults if still not found
         current_location = current_location or self.default_current_location
         destination = destination or self.default_destination
 
-        # Verify address using Google Maps API
+        # Step 2: Verify destination address using Google Maps API
         address_verification = self.maps_api.geocode_address(destination)
 
+        # Step 3: Generate Google Maps navigation link for agent
         maps_link = self._generate_google_maps_navigation_link(current_location, destination)
 
-        # Address verification information
+        # Step 4: Build address resolution response with verification result
         verification_info = ""
         if address_verification['success']:
             verification_info = f"""
@@ -339,21 +338,23 @@ class NavigationLocationHandler:
 **🆘 Escalation:** If address cannot be resolved in 15 minutes, contact customer support for assistance."""
 
     def handle_gps_issues(self, query: str, image_data: Optional[str] = None, order_details: Optional[Dict] = None) -> str:
-        """Handle GPS and navigation app technical problems"""
+        """Handle GPS and navigation app technical problems — 3-step workflow"""
 
+        # Step 1: Extract current location and destination from query
         current_location = self._extract_current_location(query) or self.default_current_location
         destination = self._extract_destination(query) or self.default_destination
 
+        # Step 2: Generate backup navigation links and static offline map
         maps_link = self._generate_google_maps_navigation_link(current_location, destination)
         waze_link = self._generate_waze_navigation_link(current_location, destination)
 
-        # Generate static map for offline reference
         static_map_url = self.maps_api.generate_static_map_url(
             center=destination,
             markers=[current_location, destination],
             zoom=14
         )
 
+        # Step 3: Return GPS troubleshooting steps and backup navigation response
         return f"""📱 **GPS & Navigation Fix**
 
 **🔧 Immediate Solutions:**
@@ -391,14 +392,15 @@ class NavigationLocationHandler:
 - Device replacement available for persistent problems"""
 
     def handle_general_navigation(self, query: str, image_data: Optional[str] = None, order_details: Optional[Dict] = None) -> str:
-        """General navigation assistance"""
+        """General navigation assistance — 3-step workflow"""
 
+        # Step 1: Extract current location and destination from query
         current_location = self._extract_current_location(query) or self.default_current_location
         destination = self._extract_destination(query) or self.default_destination
 
+        # Step 2: Generate navigation link and get route summary from Google Maps
         maps_link = self._generate_google_maps_navigation_link(current_location, destination)
 
-        # Get route information if possible
         directions_result = self.maps_api.get_directions(current_location, destination)
         route_summary = ""
         if directions_result['success']:
@@ -409,6 +411,7 @@ class NavigationLocationHandler:
 - **Navigation Steps:** {directions_result['steps']} turns/instructions
 """
 
+        # Step 3: Return navigation assistant response with route details and tips
         return f"""🧭 **Navigation Assistant**
 
 **📍 Your Navigation Link:**

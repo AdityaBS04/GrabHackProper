@@ -10,19 +10,23 @@ from typing import Optional
 
 # Add parent directory to path to import enhanced_ai_engine
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-from enhanced_ai_engine import EnhancedAgenticAIEngine
+from enhanced_ai_engine_fixed import EnhancedAgenticAIEngine
 
 logger = logging.getLogger(__name__)
 
 
 class DeliveryExperienceHandler:
     """Customer-focused delivery experience management with real AI"""
-    
+
     def __init__(self, groq_api_key: str = None):
         self.service = "grab_food"
         self.actor = "customer"
         self.handler_type = "delivery_experience_handler"
-        self.ai_engine = EnhancedAgenticAIEngine()
+        try:
+            self.ai_engine = EnhancedAgenticAIEngine()
+        except Exception as e:
+            logger.warning(f"AI engine initialization failed: {e}")
+            self.ai_engine = None
         
     def handle_delivery_delay(self, query: str, image_data: Optional[str] = None, username: str = "anonymous") -> str:
         """Handle delay beyond promised time with strict 6-step workflow - TEXT ONLY"""

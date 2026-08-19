@@ -5,6 +5,7 @@ Customer unavailable, Long wait times, Late cancellations
 """
 
 import asyncio
+import logging
 from datetime import datetime, timedelta
 from typing import Optional, Dict, List, Any, Tuple
 from dataclasses import dataclass
@@ -13,6 +14,8 @@ import base64
 import json
 
 from groq import AsyncGroq
+
+logger = logging.getLogger(__name__)
 
 
 class OperationalIssueType(Enum):
@@ -426,12 +429,6 @@ class OperationalHandler:
                 "original_order_disposal_arranged": True
             }
             
-            # Check restaurant availability
-            coordination_result["restaurant_can_remake"] = True  # Simulate restaurant check
-            
-            if not coordination_result["restaurant_can_remake"]:
-                coordination_result["full_refund_processed"] = True
-                coordination_result["alternative_restaurant_suggested"] = True
         else:
             coordination_result = {
                 "replacement_not_required": True,

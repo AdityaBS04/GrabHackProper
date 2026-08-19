@@ -89,24 +89,24 @@ class TechnicalHandler:
             return {"error": "Unknown technical issue type"}
     
     async def _handle_app_crash(self, context: TechnicalContext) -> Dict[str, Any]:
-        """Handle delivery app crashes and freezing"""
-        
-        # Diagnose crash severity and causes
+        """Handle delivery app crashes and freezing — 6-step workflow"""
+
+        # Step 1: Diagnose crash severity and probable causes
         crash_diagnosis = await self._diagnose_app_crash(context)
-        
-        # Immediate recovery actions
+
+        # Step 2: Execute immediate crash recovery protocol
         recovery_actions = await self._execute_crash_recovery_protocol(context, crash_diagnosis)
-        
-        # Data recovery and protection
+
+        # Step 3: Handle data recovery and prevent data loss
         data_recovery = await self._handle_crash_data_recovery(context, crash_diagnosis)
-        
-        # Alternative solutions during downtime
+
+        # Step 4: Provide alternative solutions during app downtime
         alternative_solutions = await self._provide_crash_alternatives(context, crash_diagnosis)
-        
-        # Technical support escalation
+
+        # Step 5: Escalate to technical support if recovery fails
         technical_support = await self._escalate_crash_technical_support(context, crash_diagnosis)
-        
-        # Agent compensation for downtime
+
+        # Step 6: Calculate and process agent compensation for downtime
         compensation = await self._calculate_crash_compensation(context, crash_diagnosis)
         
         return {
@@ -169,21 +169,21 @@ class TechnicalHandler:
             return self._create_fallback_crash_diagnosis(context)
     
     async def _handle_otp_issue(self, context: TechnicalContext) -> Dict[str, Any]:
-        """Handle OTP/delivery code not showing issues"""
-        
-        # Diagnose OTP issue
+        """Handle OTP/delivery code not showing issues — 5-step workflow"""
+
+        # Step 1: Diagnose OTP delivery failure type and severity
         otp_diagnosis = await self._diagnose_otp_issue(context)
-        
-        # OTP recovery methods
+
+        # Step 2: Attempt OTP recovery through multiple methods
         otp_recovery = await self._attempt_otp_recovery(context, otp_diagnosis)
-        
-        # Alternative verification methods
+
+        # Step 3: Provide alternative delivery verification methods
         alternative_verification = await self._provide_alternative_verification(context, otp_diagnosis)
-        
-        # Customer communication during OTP issues
+
+        # Step 4: Manage customer communication during OTP resolution
         customer_communication = await self._manage_otp_customer_communication(context, otp_diagnosis)
-        
-        # Performance protection
+
+        # Step 5: Apply performance protection for technical OTP failure
         performance_protection = await self._apply_otp_performance_protection(context, otp_diagnosis)
         
         return {
@@ -198,21 +198,21 @@ class TechnicalHandler:
         }
     
     async def _handle_map_sync_failure(self, context: TechnicalContext) -> Dict[str, Any]:
-        """Handle map data synchronization failures"""
-        
-        # Diagnose sync issue
+        """Handle map data synchronization failures — 5-step workflow"""
+
+        # Step 1: Diagnose map synchronization issue type and root cause
         sync_diagnosis = await self._diagnose_sync_issue(context, "map")
-        
-        # Map data recovery
+
+        # Step 2: Recover map data and restore navigation functionality
         map_recovery = await self._recover_map_data(context, sync_diagnosis)
-        
-        # Alternative navigation solutions
+
+        # Step 3: Provide alternative navigation solutions during sync failure
         navigation_alternatives = await self._provide_navigation_alternatives(context, sync_diagnosis)
-        
-        # Route optimization during sync issues
+
+        # Step 4: Optimize delivery routes around sync failure constraints
         route_optimization = await self._optimize_routes_during_sync_failure(context, sync_diagnosis)
-        
-        # Performance protection
+
+        # Step 5: Apply performance protection for system sync failure
         performance_protection = await self._apply_sync_performance_protection(context, sync_diagnosis)
         
         return {
@@ -227,21 +227,21 @@ class TechnicalHandler:
         }
     
     async def _handle_order_sync_failure(self, context: TechnicalContext) -> Dict[str, Any]:
-        """Handle order details synchronization failures"""
-        
-        # Diagnose order sync issue
+        """Handle order details synchronization failures — 5-step workflow"""
+
+        # Step 1: Diagnose order data synchronization issue and root cause
         order_sync_diagnosis = await self._diagnose_sync_issue(context, "order")
-        
-        # Order data recovery
+
+        # Step 2: Recover order data from backup sources
         order_recovery = await self._recover_order_data(context, order_sync_diagnosis)
-        
-        # Manual order management
+
+        # Step 3: Enable manual order management as operational fallback
         manual_management = await self._enable_manual_order_management(context, order_sync_diagnosis)
-        
-        # Customer and store communication
+
+        # Step 4: Communicate sync issues to affected customers and store
         stakeholder_communication = await self._manage_sync_stakeholder_communication(context, order_sync_diagnosis)
-        
-        # Performance protection
+
+        # Step 5: Apply performance protection for system sync failure
         performance_protection = await self._apply_sync_performance_protection(context, order_sync_diagnosis)
         
         return {
@@ -256,21 +256,21 @@ class TechnicalHandler:
         }
     
     async def _handle_payment_settlement_issue(self, context: TechnicalContext) -> Dict[str, Any]:
-        """Handle payment settlement not reflecting in driver app"""
-        
-        # Analyze payment discrepancy
+        """Handle payment settlement not reflecting in driver app — 5-step workflow"""
+
+        # Step 1: Analyze payment discrepancy and identify issue type
         payment_analysis = await self._analyze_payment_settlement_issue(context)
-        
-        # Payment verification and reconciliation
+
+        # Step 2: Verify and reconcile payment records against completed deliveries
         payment_verification = await self._verify_and_reconcile_payments(context, payment_analysis)
-        
-        # Escalation to finance team
+
+        # Step 3: Escalate to finance team for manual review and correction
         finance_escalation = await self._escalate_to_finance_team(context, payment_analysis)
-        
-        # Interim compensation if needed
+
+        # Step 4: Process interim compensation if discrepancy exceeds threshold
         interim_compensation = await self._process_interim_payment_compensation(context, payment_analysis)
-        
-        # Payment system improvements
+
+        # Step 5: Recommend payment system improvements to prevent recurrence
         system_improvements = await self._recommend_payment_system_improvements(context, payment_analysis)
         
         return {

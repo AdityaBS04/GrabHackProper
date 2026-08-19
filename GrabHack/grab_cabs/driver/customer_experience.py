@@ -28,175 +28,304 @@ class CustomerExperienceHandler:
             logger.warning(f"AI engine initialization failed: {e}")
             self.ai_engine = None
         
-    def handle_passenger_harassment_complaint(self, query: str, harassment_type: str = None, image_data: Optional[str] = None, workflow_stage: str = "initial") -> str:
-        """Handle passenger harassment complaints with strict dropdown + AI interpretation hybrid"""
-        logger.info(f"Processing passenger harassment complaint - Type: {harassment_type}, Stage: {workflow_stage}")
+    def handle_passenger_harassment_complaint(self, query: str, harassment_type: str = None, image_data: Optional[str] = None, username: str = "anonymous") -> str:
+        """Handle passenger harassment complaints with flat 5-step workflow"""
+        logger.info(f"Processing passenger harassment complaint - Type: {harassment_type}")
 
-        # STAGE 1: Show strict dropdown options (NO AI)
-        if workflow_stage == "initial" or not harassment_type:
-            return """🚨 **Passenger Harassment Report**
+        # Step 1: Identify harassment type and severity from query and explicit type param
+        harassment_analysis = self.analyze_harassment_type(query, harassment_type)
 
-Please select the type of harassment you experienced from the passenger:
+        # Step 2: Check incident context and evidence availability
+        incident_context = self.check_harassment_incident_context(harassment_analysis, query)
 
-**📋 Select Harassment Type:**
-☐ Threats
-☐ Verbal Abuse
-☐ Physical Abuse
-☐ Stalking
-☐ Inappropriate Behaviour
+        # Step 3: Check driver credibility score
+        credibility_score = self.get_credibility_score(username)
 
-Please select one option above to continue with your report."""
+        # Step 4: Decide escalation and response action based on severity and credibility
+        decision = self.decide_harassment_resolution(harassment_analysis, incident_context, credibility_score)
 
-        # STAGE 2: Show apology and description prompt (NO AI)
-        if harassment_type and workflow_stage == "type_selected":
-            return f"""🚨 **Passenger Harassment Report - {harassment_type}**
+        # Step 5: Generate empathetic response with safety info, actions, and next steps
+        response = self.generate_harassment_response(decision, harassment_analysis, query, image_data)
+        return response
 
-**We are deeply sorry this happened to you.**
-
-This behavior goes completely against Grab's core values. We are committed to providing a safe, respectful working environment for all our driver-partners. Your safety and well-being are our absolute priority, and we take these incidents extremely seriously.
-
-**📝 Please describe what happened:**
-
-Please provide a detailed description of the incident. You can include:
-- Text description of what occurred
-- Date and time of the incident
-- Trip/order details if known
-- Passenger details (automatically available to us)
-
-**After you submit your description, you'll be prompted to upload evidence if available.**"""
-
-        # STAGE 3: Request image upload after text description
-        if harassment_type and workflow_stage == "image_request":
-            return f"""📷 **Evidence Upload - {harassment_type}**
-
-Thank you for providing the details about your {harassment_type} incident with the passenger.
-
-**Please upload evidence if you have any:**
-
-📸 **Photos or screenshots** that support your report:
-- Screenshots of inappropriate messages
-- Photos of any relevant evidence
-- Pictures that document the incident (if safe to take)
-- Dash cam footage screenshots
-
-**Note:** Evidence helps us:
-- Process your case faster
-- Take appropriate action against the passenger
-- Provide better support for your situation
-- Protect you and other drivers
-
-**🔄 If you don't have evidence to upload, type "no evidence" to continue to the final resolution.**"""
-
-        # STAGE 4: AI processes with Llama Maverick for image analysis + personalized response
-        if harassment_type and query and workflow_stage == "ai_processing":
-            if self.ai_engine:
-                # Use AI to generate contextual, empathetic response based on driver's specific situation
-                # If image provided, Llama Maverick will analyze it for evidence verification
-                ai_context = f"""
-                HARASSMENT TYPE: {harassment_type}
-                DRIVER DESCRIPTION: {query}
-                IMAGE PROVIDED: {"Yes - analyze for evidence" if image_data else "No"}
-
-                Generate a personalized, empathetic response for a driver-partner that:
-                1. Acknowledges their specific situation and validates their experience
-                2. {"Analyzes the provided evidence and incorporates findings" if image_data else "Processes text description thoroughly"}
-                3. Provides relevant safety advice for their harassment type
-                4. Offers specific next steps based on their description
-                5. Shows understanding of the impact on their livelihood
-                6. Provides tailored resources for drivers
-                7. Addresses income protection concerns
-
-                {"If image evidence is provided, comment on what you can observe and how it supports their case." if image_data else ""}
-                Be conversational, supportive, and specific to their situation as a driver.
-                """
-
-                try:
-                    ai_response = self.ai_engine.process_complaint(
-                        function_name="handle_passenger_harassment_personalized",
-                        user_query=ai_context,
-                        service=self.service,
-                        user_type=self.actor,
-                        image_data=image_data
-                    )
-
-                    # Add structured helplines after AI response
-                    helplines = f"""
-
-🆘 **Emergency Helplines & Support**
-
-**Immediate Safety:**
-- Emergency Services: 911
-- Grab Driver Safety Hotline: 1-800-GRAB-DRIVER
-- Crisis Support: 1-800-273-8255
-
-**Grab Driver Support:**
-- 24/7 Driver Care: Available in your Grab Driver app
-- Email: driversafety@grab.com
-- Live Chat: Available 24/7
-
-**Additional Resources:**
-- Local Police: Contact if immediate danger
-- Counseling Services: Available through Grab partnership
-- Legal Support: Contact our legal team for guidance
-- Driver Support Groups: Available in your area
-
-**Case Reference:** GC-DRIVER-HARASSMENT-{harassment_type.upper().replace(' ', '')}-001
-
-**Action Taken:**
-✅ Passenger immediately suspended from platform pending investigation
-✅ Incident escalated to driver safety team
-✅ Case opened with reference number above
-✅ You will receive follow-up within 2 hours
-✅ Income protection during investigation period"""
-
-                    return f"{ai_response}{helplines}"
-
-                except Exception as e:
-                    logger.error(f"AI processing failed: {e}")
-
-            # Fallback if AI fails
-            return f"""I understand you experienced {harassment_type} from a passenger. This is completely unacceptable and we take this very seriously as it affects your safety and livelihood.
-
-**Your situation has been escalated immediately.** Based on your description: "{query[:100]}{'...' if len(query) > 100 else ''}", we are taking the following actions:
-
-**Immediate Actions:**
-- Passenger suspended from platform pending investigation
-- Driver safety team notified for priority handling
-- Your account flagged for enhanced protection
-- Income protection activated during investigation
-
-**What happens next:**
-- Investigation team will review all trip details
-- You'll receive updates within 2 hours
-- Additional safety measures will be implemented
-- Earnings protection will be processed
-
-🆘 **Driver Emergency Support Available 24/7:**
-- Grab Driver Safety: 1-800-GRAB-DRIVER
-- Crisis Support: 1-800-273-8255
-- Case Reference: GC-DRIVER-HARASSMENT-{harassment_type.upper().replace(' ', '')}-001"""
-
-        # Default fallback
-        return "Please specify the harassment type to continue with your report."
-
-    def handle_false_complaint_rating_reduction(self, query: str, image_data: Optional[str] = None) -> str:
-        """Handle false complaints that reduced rating complaints - TEXT ONLY"""
+    def handle_false_complaint_rating_reduction(self, query: str, image_data: Optional[str] = None, username: str = "anonymous") -> str:
+        """Handle false complaints that reduced driver rating with strict 5-step workflow"""
         logger.info(f"Processing false complaint rating reduction complaint: {query[:100]}...")
-        return self.ai_engine.process_complaint(
-            function_name="handle_false_complaint_rating_reduction",
-            user_query=query,
-            service=self.service,
-            user_type=self.actor,
-            image_data=image_data
-        )
 
-    def handle_unresolved_passenger_disputes(self, query: str, image_data: Optional[str] = None) -> str:
-        """Handle escalation of unresolved disputes with passengers complaints - TEXT ONLY"""
+        # Step 1: Identify the type of false complaint reported
+        complaint_analysis = self.analyze_false_complaint_type(query)
+        logger.info(f"False complaint analysis: {complaint_analysis}")
+
+        # Step 2: Check whether counter-evidence or trip data supports the driver
+        evidence_check = self.check_driver_counter_evidence(complaint_analysis, query)
+        logger.info(f"Evidence check: {evidence_check}")
+
+        # Step 3: Check driver credibility score
+        credibility_score = self.get_credibility_score(username)
+        logger.info(f"Driver credibility: {credibility_score}/10")
+
+        # Step 4: Decide on rating review and complaint flagging action
+        decision = self.decide_false_complaint_resolution(complaint_analysis, evidence_check, credibility_score)
+        logger.info(f"Resolution decision: {decision}")
+
+        # Step 5: Generate response with rating protection and investigation details
+        response = self.generate_false_complaint_response(decision, complaint_analysis, query, image_data)
+        logger.info("False complaint rating reduction response generated successfully")
+        return response
+
+    def handle_unresolved_passenger_disputes(self, query: str, image_data: Optional[str] = None, username: str = "anonymous") -> str:
+        """Handle escalation of unresolved passenger disputes with strict 5-step workflow"""
         logger.info(f"Processing unresolved passenger disputes complaint: {query[:100]}...")
-        return self.ai_engine.process_complaint(
-            function_name="handle_unresolved_passenger_disputes",
-            user_query=query,
-            service=self.service,
-            user_type=self.actor,
-            image_data=image_data
-        )
+
+        # Step 1: Identify the nature of the unresolved dispute
+        dispute_analysis = self.analyze_dispute_type(query)
+        logger.info(f"Dispute analysis: {dispute_analysis}")
+
+        # Step 2: Assess the severity and financial impact of the dispute
+        dispute_severity = self.assess_dispute_severity(dispute_analysis, query)
+        logger.info(f"Dispute severity: {dispute_severity}")
+
+        # Step 3: Check driver credibility score
+        credibility_score = self.get_credibility_score(username)
+        logger.info(f"Driver credibility: {credibility_score}/10")
+
+        # Step 4: Decide on escalation and resolution path
+        decision = self.decide_dispute_resolution(dispute_analysis, dispute_severity, credibility_score)
+        logger.info(f"Resolution decision: {decision}")
+
+        # Step 5: Generate response with escalation confirmation and next steps
+        response = self.generate_dispute_response(decision, dispute_analysis, query, image_data)
+        logger.info("Unresolved passenger disputes response generated successfully")
+        return response
+
+    # ===== SUPPORTING METHODS FOR STRICT WORKFLOWS =====
+
+    def _db_path(self) -> Optional[str]:
+        """Resolve the path to the GrabHack database, or None if it cannot be found"""
+        paths = ['grabhack.db', '../grabhack.db', 'GrabHack/grabhack.db',
+                 os.path.join(os.path.dirname(__file__), '../../../grabhack.db')]
+        return next((p for p in paths if os.path.exists(p)), None)
+
+    def get_credibility_score(self, username: str) -> int:
+        """Get driver credibility score from database"""
+        import sqlite3
+        import os
+        base_score = 7
+        if not username or username == "anonymous":
+            return max(1, base_score - 2)
+        try:
+            db_path = self._db_path()
+            if not db_path:
+                return base_score
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            cursor.execute('SELECT credibility_score FROM users WHERE username = ?', (username,))
+            row = cursor.fetchone()
+            conn.close()
+            return row[0] if row else base_score
+        except Exception as e:
+            logger.error(f"Error fetching credibility: {e}")
+            return base_score
+
+    def analyze_harassment_type(self, query: str, harassment_type: str = None) -> str:
+        """Identify harassment type from explicit param or query text"""
+        if harassment_type:
+            return harassment_type.upper().replace(" ", "_")
+        query_lower = query.lower()
+        if any(w in query_lower for w in ['threat', 'threaten', 'kill', 'harm']):
+            return "THREATS"
+        elif any(w in query_lower for w in ['physical', 'hit', 'assault', 'punch', 'attack']):
+            return "PHYSICAL_ABUSE"
+        elif any(w in query_lower for w in ['stalk', 'follow', 'track']):
+            return "STALKING"
+        elif any(w in query_lower for w in ['inappropriate', 'sexual', 'touch', 'grope']):
+            return "INAPPROPRIATE_BEHAVIOUR"
+        return "VERBAL_ABUSE"
+
+    def check_harassment_incident_context(self, harassment_type: str, query: str) -> dict:
+        """Check incident context: severity, whether evidence is present, safety status"""
+        high_severity_types = {"THREATS", "PHYSICAL_ABUSE", "STALKING"}
+        return {
+            "severity": "HIGH" if harassment_type in high_severity_types else "MODERATE",
+            "has_evidence": bool(query and len(query) > 20),
+            "immediate_danger": harassment_type in {"THREATS", "PHYSICAL_ABUSE"},
+        }
+
+    def decide_harassment_resolution(self, harassment_type: str, context: dict, credibility: int) -> str:
+        """Decide escalation tier based on harassment severity and driver credibility"""
+        if context.get("immediate_danger"):
+            return "EMERGENCY_ESCALATION"
+        # Stalking is an ongoing safety risk to the driver even once the trip is over
+        if harassment_type == "STALKING":
+            return "PRIORITY_CASE_OPENED"
+        if context.get("severity") == "HIGH" and credibility >= 6:
+            return "PRIORITY_CASE_OPENED"
+        if harassment_type in ("VERBAL_ABUSE", "INAPPROPRIATE_BEHAVIOUR") and credibility >= 5:
+            return "STANDARD_INVESTIGATION"
+        if credibility >= 5:
+            return "STANDARD_INVESTIGATION"
+        return "CASE_LOGGED_REVIEW"
+
+    def generate_harassment_response(self, decision: str, harassment_type: str, query: str, image_data: Optional[str]) -> str:
+        """Generate empathetic harassment response with AI or fallback template"""
+        display_type = harassment_type.replace("_", " ").title()
+        case_ref = f"GC-DRIVER-HARASSMENT-{harassment_type}-001"
+
+        if self.ai_engine:
+            try:
+                ai_context = (
+                    f"HARASSMENT TYPE: {display_type}\n"
+                    f"DECISION: {decision}\n"
+                    f"DRIVER DESCRIPTION: {query}\n"
+                    f"IMAGE PROVIDED: {'Yes - analyze for evidence' if image_data else 'No'}\n\n"
+                    "Generate a personalized, empathetic response for a driver-partner that: "
+                    "acknowledges their specific situation, validates their experience, "
+                    "provides relevant safety advice, and gives specific next steps. "
+                    "Address income protection concerns and provide driver support resources."
+                )
+                ai_response = self.ai_engine.process_complaint(
+                    function_name="handle_passenger_harassment_complaint",
+                    user_query=ai_context,
+                    service=self.service,
+                    user_type=self.actor,
+                    image_data=image_data,
+                )
+                return (
+                    f"{ai_response}\n\n"
+                    f"**Case Reference:** {case_ref}\n"
+                    "**Emergency Support:** Grab Driver Safety: 1-800-GRAB-DRIVER | Crisis Support: 1-800-273-8255"
+                )
+            except Exception as e:
+                logger.error(f"AI failed for harassment response: {e}")
+
+        templates = {
+            "EMERGENCY_ESCALATION": (
+                f"We are treating your {display_type} report as an emergency. "
+                "Driver safety team has been notified immediately. "
+                "The passenger has been suspended pending investigation. "
+                "If you are in immediate danger, please call emergency services (911). "
+                f"Income protection is activated. Case Reference: {case_ref}"
+            ),
+            "PRIORITY_CASE_OPENED": (
+                f"We are deeply sorry you experienced {display_type}. "
+                "A priority case has been opened and you will receive a response within 2 hours. "
+                "The passenger has been temporarily suspended. "
+                f"Your earnings are protected during the investigation. Case Reference: {case_ref}"
+            ),
+            "STANDARD_INVESTIGATION": (
+                f"Your {display_type} report has been received and an investigation has been opened. "
+                "Our driver relations team will review trip data and respond within 24 hours. "
+                f"Case Reference: {case_ref}"
+            ),
+            "CASE_LOGGED_REVIEW": (
+                f"Your {display_type} report has been logged. "
+                "Our team will review and contact you within 48 hours. "
+                f"Case Reference: {case_ref}"
+            ),
+        }
+        return templates.get(decision, f"Your harassment report has been received. Case Reference: {case_ref}")
+
+    def analyze_false_complaint_type(self, query: str) -> str:
+        """Identify what type of false complaint was filed against the driver"""
+        query_lower = query.lower()
+        if any(w in query_lower for w in ['rude', 'behaviour', 'attitude']):
+            return "FALSE_RUDE_BEHAVIOUR_COMPLAINT"
+        elif any(w in query_lower for w in ['route', 'overcharge', 'fare']):
+            return "FALSE_OVERCHARGING_COMPLAINT"
+        elif any(w in query_lower for w in ['late', 'delay', 'slow']):
+            return "FALSE_DELAY_COMPLAINT"
+        return "GENERAL_FALSE_COMPLAINT"
+
+    def check_driver_counter_evidence(self, analysis: str, query: str) -> str:
+        """Check if trip data or evidence supports the driver's counter-claim"""
+        query_lower = query.lower()
+        # Dashcam or trip data the driver can point to is what makes a counter-claim checkable
+        if any(w in query_lower for w in ['dashcam', 'dash cam', 'recording', 'video', 'camera']):
+            return "RECORDED_EVIDENCE_AVAILABLE"
+        elif any(w in query_lower for w in ['gps', 'trip id', 'booking id', 'route log', 'tracking']):
+            return "TRIP_DATA_SUPPORTS_DRIVER"
+        elif any(w in query_lower for w in ['passenger', 'witness', 'co-passenger', 'another rider']):
+            return "WITNESS_ACCOUNT_OFFERED"
+        return "DRIVER_STATEMENT_ONLY"
+
+    def decide_false_complaint_resolution(self, analysis: str, evidence: str, credibility: int) -> str:
+        """Decide rating review and complaint flagging action"""
+        # Recorded evidence or trip data settles the dispute without waiting on standing
+        if evidence in ("RECORDED_EVIDENCE_AVAILABLE", "TRIP_DATA_SUPPORTS_DRIVER") and credibility >= 5:
+            return "RATING_RESTORED_COMPLAINT_FLAGGED"
+        elif credibility >= 7:
+            return "RATING_RESTORED_COMPLAINT_FLAGGED"
+        elif evidence == "WITNESS_ACCOUNT_OFFERED" and credibility >= 4:
+            return "INVESTIGATION_INITIATED_TEMPORARY_PROTECTION"
+        elif analysis == "FALSE_OVERCHARGING_COMPLAINT" and credibility >= 5:
+            # Fare claims are checkable against our own billing records
+            return "RATING_RESTORED_COMPLAINT_FLAGGED"
+        elif credibility >= 5:
+            return "INVESTIGATION_INITIATED_TEMPORARY_PROTECTION"
+        return "COMPLAINT_LOGGED_UNDER_REVIEW"
+
+    def generate_false_complaint_response(self, decision: str, analysis: str, query: str, image_data: Optional[str]) -> str:
+        """Generate false complaint response"""
+        if self.ai_engine:
+            try:
+                return self.ai_engine.process_complaint(
+                    function_name="handle_false_complaint_rating_reduction",
+                    user_query=f"DECISION: {decision} | COMPLAINT_TYPE: {analysis} | QUERY: {query}",
+                    service=self.service, user_type=self.actor, image_data=image_data
+                )
+            except Exception as e:
+                logger.error(f"AI failed: {e}")
+        responses = {
+            "RATING_RESTORED_COMPLAINT_FLAGGED": "We have reviewed the trip data and found the complaint to be unsubstantiated. Your rating has been restored and the false complaint has been flagged on the passenger's account.",
+            "INVESTIGATION_INITIATED_TEMPORARY_PROTECTION": "A full investigation has been initiated. Your rating is temporarily protected during the review period and you will not be penalised while we investigate.",
+            "COMPLAINT_LOGGED_UNDER_REVIEW": "Your counter-complaint has been logged. Our driver relations team will review the trip records and respond within 48 hours."
+        }
+        return responses.get(decision, "Your false complaint appeal has been received and is under review. We will update you within 48 hours.")
+
+    def analyze_dispute_type(self, query: str) -> str:
+        """Identify the nature of the unresolved passenger dispute"""
+        query_lower = query.lower()
+        if any(w in query_lower for w in ['fare', 'payment', 'money', 'charge']):
+            return "FARE_PAYMENT_DISPUTE"
+        elif any(w in query_lower for w in ['rating', 'review', 'feedback']):
+            return "RATING_REVIEW_DISPUTE"
+        elif any(w in query_lower for w in ['behaviour', 'harassment', 'rude']):
+            return "PASSENGER_BEHAVIOUR_DISPUTE"
+        return "GENERAL_PASSENGER_DISPUTE"
+
+    def assess_dispute_severity(self, analysis: str, query: str) -> str:
+        """Assess the severity and impact of the unresolved dispute"""
+        high_severity = ["PASSENGER_BEHAVIOUR_DISPUTE", "FARE_PAYMENT_DISPUTE"]
+        return "HIGH_SEVERITY" if analysis in high_severity else "MODERATE_SEVERITY"
+
+    def decide_dispute_resolution(self, analysis: str, severity: str, credibility: int) -> str:
+        """Decide escalation path for the unresolved dispute"""
+        if severity == "HIGH_SEVERITY" and credibility >= 6:
+            return "SENIOR_CASE_MANAGER_ASSIGNED"
+        # A passenger-behaviour dispute affects the driver's safety record, so it gets
+        # a named owner rather than sitting in the general queue
+        elif analysis == "PASSENGER_BEHAVIOUR_DISPUTE" and credibility >= 5:
+            return "SENIOR_CASE_MANAGER_ASSIGNED"
+        elif analysis in ("FARE_PAYMENT_DISPUTE", "RATING_REVIEW_DISPUTE") and credibility >= 4:
+            return "FORMAL_INVESTIGATION_OPENED"
+        elif credibility >= 5:
+            return "FORMAL_INVESTIGATION_OPENED"
+        return "STANDARD_DISPUTE_REVIEW"
+
+    def generate_dispute_response(self, decision: str, analysis: str, query: str, image_data: Optional[str]) -> str:
+        """Generate unresolved dispute response"""
+        if self.ai_engine:
+            try:
+                return self.ai_engine.process_complaint(
+                    function_name="handle_unresolved_passenger_disputes",
+                    user_query=f"DECISION: {decision} | DISPUTE: {analysis} | QUERY: {query}",
+                    service=self.service, user_type=self.actor, image_data=image_data
+                )
+            except Exception as e:
+                logger.error(f"AI failed: {e}")
+        responses = {
+            "SENIOR_CASE_MANAGER_ASSIGNED": "Given the severity of this dispute, a senior case manager has been assigned to your case. They will contact you within 2 hours with a full resolution plan.",
+            "FORMAL_INVESTIGATION_OPENED": "A formal investigation has been opened for your dispute. All trip data, GPS records, and communication logs are being reviewed. You will receive an update within 24 hours.",
+            "STANDARD_DISPUTE_REVIEW": "Your dispute has been escalated to our driver relations team. They will review all available evidence and provide a resolution within 3 business days."
+        }
+        return responses.get(decision, "Your dispute escalation has been received. Our team will review and contact you within 48 hours.")

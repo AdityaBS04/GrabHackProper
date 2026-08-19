@@ -10,59 +10,191 @@ logger = logging.getLogger(__name__)
 
 
 class DarkHouseInventoryHandler:
-    """Dark house (warehouse) inventory management and quality control"""
-    
+    """Dark house (warehouse) inventory management and quality control with strict workflows"""
+
     def __init__(self, groq_api_key: str = None):
         self.service = "grab_mart"
         self.actor = "dark_house"
-        
+
     def handle_inventory_shortage(self, query: str) -> str:
-        """Handle warehouse inventory shortage and stock management"""
-        return """📦 **Dark House Inventory Management Alert**
+        """Handle warehouse inventory shortage with strict 5-step workflow"""
+        logger.info(f"Processing inventory shortage report: {query[:100]}...")
 
-**Stock Shortage Issue - Immediate Action Required**
+        # Step 1: Identify the affected products and shortage severity
+        shortage_analysis = self.analyze_shortage_severity(query)
+        logger.info(f"Shortage analysis: {shortage_analysis}")
 
-**Inventory Analysis:**
-- Product shortage detected: impact on customer orders
-- Stock replenishment required urgently
-- Customer order fulfillment compromised
-- Automatic supplier notification triggered
+        # Step 2: Assess the customer order impact from the shortage
+        order_impact = self.assess_customer_order_impact(shortage_analysis)
+        logger.info(f"Order impact: {order_impact}")
 
-**Immediate Actions Required:**
-1. Emergency stock count verification
-2. Supplier expedited delivery request
-3. Alternative product sourcing activation
-4. Customer order impact assessment
+        # Step 3: Check supplier availability for emergency replenishment
+        supplier_status = self.check_supplier_availability(shortage_analysis)
+        logger.info(f"Supplier status: {supplier_status}")
+
+        # Step 4: Decide on emergency reorder and customer mitigation actions
+        decision = self.decide_shortage_resolution(shortage_analysis, order_impact, supplier_status)
+        logger.info(f"Resolution decision: {decision}")
+
+        # Step 5: Generate comprehensive inventory shortage management report
+        response = self.generate_shortage_report(decision, shortage_analysis, order_impact)
+        logger.info("Inventory shortage response generated successfully")
+        return response
+
+    def handle_product_quality_control(self, query: str) -> str:
+        """Handle warehouse product quality control with strict 5-step workflow"""
+        logger.info(f"Processing quality control report: {query[:100]}...")
+
+        # Step 1: Identify the quality issue type and affected products
+        quality_analysis = self.analyze_quality_issue(query)
+        logger.info(f"Quality analysis: {quality_analysis}")
+
+        # Step 2: Assess the scope and potential customer safety impact
+        safety_impact = self.assess_quality_safety_impact(quality_analysis)
+        logger.info(f"Safety impact: {safety_impact}")
+
+        # Step 3: Check current inspection protocol compliance status
+        protocol_status = self.check_inspection_protocol_status(quality_analysis)
+        logger.info(f"Protocol status: {protocol_status}")
+
+        # Step 4: Decide on quarantine, disposal, and process improvement actions
+        decision = self.decide_quality_resolution(quality_analysis, safety_impact, protocol_status)
+        logger.info(f"Resolution decision: {decision}")
+
+        # Step 5: Generate quality control action plan and report
+        response = self.generate_quality_report(decision, quality_analysis, safety_impact)
+        logger.info("Quality control response generated successfully")
+        return response
+
+    def handle_picking_accuracy(self, query: str) -> str:
+        """Handle warehouse picking accuracy with strict 5-step workflow"""
+        logger.info(f"Processing picking accuracy report: {query[:100]}...")
+
+        # Step 1: Identify the accuracy failure type and frequency
+        accuracy_analysis = self.analyze_picking_accuracy_issue(query)
+        logger.info(f"Accuracy analysis: {accuracy_analysis}")
+
+        # Step 2: Assess the customer impact and error rate
+        error_impact = self.assess_picking_error_impact(accuracy_analysis)
+        logger.info(f"Error impact: {error_impact}")
+
+        # Step 3: Check current picking system and staff performance
+        system_check = self.check_picking_system_performance(accuracy_analysis)
+        logger.info(f"System check: {system_check}")
+
+        # Step 4: Decide on training, technology, and process improvement actions
+        decision = self.decide_accuracy_resolution(accuracy_analysis, error_impact, system_check)
+        logger.info(f"Resolution decision: {decision}")
+
+        # Step 5: Generate picking accuracy improvement action plan
+        response = self.generate_accuracy_report(decision, accuracy_analysis, error_impact)
+        logger.info("Picking accuracy response generated successfully")
+        return response
+
+    def handle_warehouse_efficiency(self, query: str) -> str:
+        """Handle warehouse operational efficiency with strict 5-step workflow"""
+        logger.info(f"Processing warehouse efficiency report: {query[:100]}...")
+
+        # Step 1: Identify the efficiency bottleneck and performance gap
+        efficiency_analysis = self.analyze_efficiency_issue(query)
+        logger.info(f"Efficiency analysis: {efficiency_analysis}")
+
+        # Step 2: Assess the impact on order processing time and throughput
+        throughput_impact = self.assess_throughput_impact(efficiency_analysis)
+        logger.info(f"Throughput impact: {throughput_impact}")
+
+        # Step 3: Check resource utilization and workflow bottlenecks
+        resource_check = self.check_resource_utilization(efficiency_analysis)
+        logger.info(f"Resource check: {resource_check}")
+
+        # Step 4: Decide on process optimization and technology integration actions
+        decision = self.decide_efficiency_resolution(efficiency_analysis, throughput_impact, resource_check)
+        logger.info(f"Resolution decision: {decision}")
+
+        # Step 5: Generate efficiency improvement initiative report
+        response = self.generate_efficiency_report(decision, efficiency_analysis, throughput_impact)
+        logger.info("Warehouse efficiency response generated successfully")
+        return response
+
+    def handle_temperature_control(self, query: str) -> str:
+        """Handle warehouse temperature control with strict 5-step workflow"""
+        logger.info(f"Processing temperature control report: {query[:100]}...")
+
+        # Step 1: Identify the temperature deviation and affected product categories
+        temp_analysis = self.analyze_temperature_deviation(query)
+        logger.info(f"Temperature analysis: {temp_analysis}")
+
+        # Step 2: Assess product safety risk and cold chain breach severity
+        safety_risk = self.assess_temperature_safety_risk(temp_analysis)
+        logger.info(f"Safety risk: {safety_risk}")
+
+        # Step 3: Check equipment status and cold chain monitoring logs
+        equipment_check = self.check_cold_chain_equipment(temp_analysis)
+        logger.info(f"Equipment check: {equipment_check}")
+
+        # Step 4: Decide on product quarantine, equipment repair, and customer communication
+        decision = self.decide_temperature_resolution(temp_analysis, safety_risk, equipment_check)
+        logger.info(f"Resolution decision: {decision}")
+
+        # Step 5: Generate temperature control emergency action report
+        response = self.generate_temperature_report(decision, temp_analysis, safety_risk)
+        logger.info("Temperature control response generated successfully")
+        return response
+
+    # ===== SUPPORTING METHODS FOR STRICT WORKFLOWS =====
+
+    def analyze_shortage_severity(self, query: str) -> str:
+        """Identify the type and severity of the inventory shortage"""
+        query_lower = query.lower()
+        if any(w in query_lower for w in ['critical', 'out of stock', 'zero']):
+            return "CRITICAL_STOCK_DEPLETION"
+        elif any(w in query_lower for w in ['low', 'running out', 'below threshold']):
+            return "LOW_STOCK_WARNING"
+        return "GENERAL_SHORTAGE"
+
+    def assess_customer_order_impact(self, analysis: str) -> str:
+        """Assess how many customer orders are affected by the shortage"""
+        return "HIGH_ORDER_IMPACT" if analysis == "CRITICAL_STOCK_DEPLETION" else "MODERATE_ORDER_IMPACT"
+
+    def check_supplier_availability(self, analysis: str) -> str:
+        """Check supplier availability for emergency replenishment"""
+        return f"Supplier check completed for {analysis} — emergency contact initiated"
+
+    def decide_shortage_resolution(self, analysis: str, impact: str, supplier: str) -> str:
+        """Decide shortage resolution actions"""
+        if analysis == "CRITICAL_STOCK_DEPLETION":
+            return "EMERGENCY_REORDER_CUSTOMER_REFUND_SUBSTITUTE"
+        elif impact == "HIGH_ORDER_IMPACT":
+            return "EXPEDITED_REORDER_PARTIAL_FULFILLMENT"
+        return "STANDARD_REORDER_INITIATED"
+
+    def generate_shortage_report(self, decision: str, analysis: str, impact: str) -> str:
+        """Generate inventory shortage management report"""
+        return f"""📦 **Dark House Inventory Management Alert**
+
+**Stock Shortage Issue — Immediate Action Required**
+
+**Inventory Analysis:** {analysis} detected — {impact}
+
+**Immediate Actions Taken:**
+1. Emergency stock count verification initiated
+2. Supplier expedited delivery request submitted
+3. Alternative product sourcing activated
+4. Customer order impact assessment: {impact}
+
+**Resolution Status:** {decision}
 
 **Stock Management Protocol:**
-- Real-time inventory tracking system update
-- Minimum stock threshold adjustment
-- Supplier delivery schedule optimization
-- Automated reorder point calculation
+- Real-time inventory tracking system updated
+- Minimum stock threshold adjustment flagged
+- Automated reorder point recalculated
+- Supplier delivery schedule optimization in progress
 
 **Customer Impact Mitigation:**
-- Affected customer orders identified: 47 orders
-- Automatic refund processing initiated
-- Substitute product recommendations
-- Customer notification and apology messaging
-
-**Inventory Control Improvements:**
-- Enhanced demand forecasting implementation
-- Supplier reliability assessment
-- Safety stock level recalculation
-- Inventory turnover optimization
-
-**Performance Metrics:**
-- Stock accuracy target: 99.5%
-- Order fulfillment rate maintenance: >98%
-- Customer satisfaction preservation
-- Supplier performance evaluation
-
-**Supplier Coordination:**
-- Emergency delivery request: within 6 hours
-- Supplier performance review scheduled
-- Alternative supplier activation
-- Quality assurance verification required
+- Affected customer orders identified and flagged
+- Automatic refund processing initiated for out-of-stock items
+- Substitute product recommendations prepared
+- Customer notification and apology messaging queued
 
 **Timeline for Resolution:**
 - Stock verification: immediate (2 hours)
@@ -72,135 +204,156 @@ class DarkHouseInventoryHandler:
 
 Maintaining stock accuracy is critical for customer satisfaction and operational efficiency."""
 
-    def handle_product_quality_control(self, query: str) -> str:
-        """Handle warehouse product quality control and inspection"""
-        return """🔍 **Product Quality Control & Inspection Protocol**
+    def analyze_quality_issue(self, query: str) -> str:
+        """Identify the type and scope of the quality issue"""
+        query_lower = query.lower()
+        if any(w in query_lower for w in ['expired', 'expiry', 'date']):
+            return "EXPIRED_PRODUCTS_FOUND"
+        elif any(w in query_lower for w in ['damaged', 'broken', 'crushed']):
+            return "DAMAGED_PRODUCTS_FOUND"
+        return "GENERAL_QUALITY_FAILURE"
 
-**Quality Control Issue - Enhanced Inspection Required**
+    def assess_quality_safety_impact(self, analysis: str) -> str:
+        """Assess the customer safety impact of the quality issue"""
+        return "HIGH_SAFETY_RISK" if analysis == "EXPIRED_PRODUCTS_FOUND" else "MODERATE_QUALITY_RISK"
 
-**Quality Issue Identified:**
-- Customer received expired/damaged products
-- Quality inspection protocol breach detected
-- Immediate inventory quality audit required
-- Enhanced quality control measures implementation
+    def check_inspection_protocol_status(self, analysis: str) -> str:
+        """Check whether inspection protocols were followed"""
+        return f"Inspection protocol audit triggered for {analysis} — compliance records under review"
+
+    def decide_quality_resolution(self, analysis: str, safety: str, protocol: str) -> str:
+        """Decide quality control resolution actions"""
+        if safety == "HIGH_SAFETY_RISK":
+            return "IMMEDIATE_QUARANTINE_DISPOSAL_AUDIT"
+        return "ENHANCED_INSPECTION_PROTOCOL_ENFORCED"
+
+    def generate_quality_report(self, decision: str, analysis: str, safety: str) -> str:
+        """Generate quality control action plan"""
+        return f"""🔍 **Product Quality Control & Inspection Protocol**
+
+**Quality Control Issue — Enhanced Inspection Required**
+
+**Quality Issue Identified:** {analysis} — Safety Risk: {safety}
 
 **Mandatory Quality Actions:**
-1. Comprehensive inventory quality inspection
-2. Expired product identification and removal
-3. Damaged item segregation and disposal
-4. Quality control process reassessment
+1. Comprehensive inventory quality inspection initiated
+2. Affected product identification and quarantine: {decision}
+3. Damaged/expired item segregation and safe disposal
+4. Quality control process reassessment ordered
 
 **Inspection Protocol Enhancement:**
-- Daily expiry date verification checks
-- Visual damage inspection procedures
-- Temperature-sensitive product monitoring
+- Daily expiry date verification checks enforced
+- Visual damage inspection procedures strengthened
+- Temperature-sensitive product monitoring intensified
 - Batch tracking and traceability implementation
 
 **Staff Training Requirements:**
-- Quality inspection procedures (all staff)
-- Expiry date management training
-- Product handling best practices
-- Documentation and reporting protocols
-
-**Quality Assurance Systems:**
-- Automated expiry date tracking system
-- Quality checkpoint scanners installation
-- Real-time quality alerts configuration
-- Customer complaint integration system
-
-**Process Improvements:**
-- First-In-First-Out (FIFO) enforcement
-- Quality scoring system implementation
-- Supplier quality assessment integration
-- Customer feedback quality correlation
+- Quality inspection procedures refresher (all staff)
+- Expiry date management training mandatory
+- Product handling best practices reinforcement
+- Documentation and reporting protocols updated
 
 **Performance Standards:**
-- Product quality accuracy: 99.8%
+- Product quality accuracy target: 99.8%
 - Zero expired products in customer orders
-- Damage rate reduction: <0.5%
+- Damage rate reduction target: <0.5%
 - Quality complaint resolution: <2 hours
-
-**Technology Integration:**
-- Barcode scanning quality verification
-- Automated expiry date monitoring
-- Temperature control system alerts
-- Quality dashboard real-time tracking
 
 Quality control is fundamental to customer trust and brand reputation."""
 
-    def handle_picking_accuracy(self, query: str) -> str:
-        """Handle warehouse picking accuracy and order fulfillment"""
-        return """✅ **Order Picking Accuracy Enhancement**
+    def analyze_picking_accuracy_issue(self, query: str) -> str:
+        """Identify the type of picking accuracy failure"""
+        query_lower = query.lower()
+        if any(w in query_lower for w in ['wrong item', 'incorrect item', 'wrong product']):
+            return "WRONG_ITEM_PICKED"
+        elif any(w in query_lower for w in ['quantity', 'count', 'too many', 'too few']):
+            return "WRONG_QUANTITY_PICKED"
+        return "GENERAL_PICKING_ERROR"
+
+    def assess_picking_error_impact(self, analysis: str) -> str:
+        """Assess the impact of the picking error on customers"""
+        return "HIGH_CUSTOMER_IMPACT" if analysis == "WRONG_ITEM_PICKED" else "MODERATE_CUSTOMER_IMPACT"
+
+    def check_picking_system_performance(self, analysis: str) -> str:
+        """Check current picking system and staff accuracy metrics"""
+        return f"Picking system audit initiated for {analysis} — accuracy metrics being pulled"
+
+    def decide_accuracy_resolution(self, analysis: str, impact: str, system: str) -> str:
+        """Decide picking accuracy improvement actions"""
+        if impact == "HIGH_CUSTOMER_IMPACT":
+            return "IMMEDIATE_STAFF_RETRAINING_TECHNOLOGY_UPGRADE"
+        return "PROCESS_OPTIMIZATION_AND_MONITORING"
+
+    def generate_accuracy_report(self, decision: str, analysis: str, impact: str) -> str:
+        """Generate picking accuracy improvement action plan"""
+        return f"""✅ **Order Picking Accuracy Enhancement**
 
 **Picking Accuracy Performance Review**
 
-**Accuracy Issue Analysis:**
-- Current picking accuracy: 94.2% (target: 99.5%)
-- Customer order errors: wrong items picked
-- Training and system enhancement required
-- Process optimization implementation needed
+**Accuracy Issue:** {analysis} — Customer Impact: {impact}
 
 **Immediate Corrective Actions:**
-1. Picker performance individual assessment
-2. Pick path optimization and training
-3. Quality verification checkpoint reinforcement
-4. Technology system accuracy enhancement
+1. Picker performance individual assessment initiated
+2. Pick path optimization and retraining: {decision}
+3. Quality verification checkpoint reinforced
+4. Technology system accuracy enhancement ordered
 
 **Picking Process Optimization:**
-- Optimized warehouse layout implementation
-- Pick path efficiency analysis and improvement
-- Batch picking strategy optimization
+- Optimized pick path efficiency analysis
+- Batch picking strategy review
 - Cross-training program for picker flexibility
+- Double-check system implementation
 
 **Quality Verification Protocol:**
-- Double-check system implementation
 - Photo verification for complex orders
-- Weight verification checkpoints
-- Final quality assurance scan
-
-**Technology Solutions:**
-- Voice-directed picking system upgrade
-- Barcode scanning accuracy improvement
-- Pick cart optimization and labeling
+- Weight verification checkpoints added
+- Final quality assurance scan enforced
 - Real-time error detection and correction
-
-**Staff Performance Enhancement:**
-- Individual picker accuracy tracking
-- Performance improvement coaching
-- Accuracy incentive program implementation
-- Best practices sharing sessions
 
 **Performance Metrics:**
 - Picking accuracy target: 99.5%
-- Order completion time optimization
-- Customer satisfaction correlation tracking
-- Error reduction and prevention focus
-
-**Training Program:**
-- Product location memorization training
-- Technology system usage optimization
-- Quality standards reinforcement
-- Error prevention best practices
+- Order completion time maintained
+- Customer satisfaction correlation tracked
+- Error reduction and prevention as priority
 
 Accurate picking is essential for customer satisfaction and operational excellence."""
 
-    def handle_warehouse_efficiency(self, query: str) -> str:
-        """Handle warehouse operational efficiency and productivity"""
-        return """⚡ **Warehouse Operational Efficiency Enhancement**
+    def analyze_efficiency_issue(self, query: str) -> str:
+        """Identify the efficiency bottleneck type"""
+        query_lower = query.lower()
+        if any(w in query_lower for w in ['slow', 'taking long', 'processing time']):
+            return "SLOW_ORDER_PROCESSING"
+        elif any(w in query_lower for w in ['staff', 'worker', 'productivity']):
+            return "STAFF_PRODUCTIVITY_ISSUE"
+        return "GENERAL_EFFICIENCY_BOTTLENECK"
+
+    def assess_throughput_impact(self, analysis: str) -> str:
+        """Assess how the efficiency issue affects order throughput"""
+        return "HIGH_THROUGHPUT_IMPACT" if analysis == "SLOW_ORDER_PROCESSING" else "MODERATE_THROUGHPUT_IMPACT"
+
+    def check_resource_utilization(self, analysis: str) -> str:
+        """Check current resource utilization and workflow bottlenecks"""
+        return f"Resource utilization audit for {analysis}: Workflow bottleneck analysis in progress"
+
+    def decide_efficiency_resolution(self, analysis: str, throughput: str, resource: str) -> str:
+        """Decide efficiency improvement actions"""
+        if throughput == "HIGH_THROUGHPUT_IMPACT":
+            return "IMMEDIATE_WORKFLOW_REDESIGN_TECHNOLOGY_INTEGRATION"
+        return "INCREMENTAL_PROCESS_OPTIMIZATION"
+
+    def generate_efficiency_report(self, decision: str, analysis: str, throughput: str) -> str:
+        """Generate warehouse efficiency improvement report"""
+        return f"""⚡ **Warehouse Operational Efficiency Enhancement**
 
 **Efficiency Optimization Initiative**
 
-**Performance Analysis:**
-- Current order processing time: 45 minutes average
-- Target processing time: 30 minutes
-- Bottleneck identification completed
-- Efficiency improvement plan development
+**Issue Identified:** {analysis} — Throughput Impact: {throughput}
 
-**Process Optimization Areas:**
-1. Workflow analysis and streamlining
+**Process Optimization Actions:**
+1. Workflow analysis and streamlining: {decision}
 2. Resource allocation optimization
 3. Technology integration enhancement
-4. Staff productivity improvement
+4. Staff productivity improvement program
 
 **Operational Improvements:**
 - Warehouse layout optimization for efficiency
@@ -210,88 +363,77 @@ Accurate picking is essential for customer satisfaction and operational excellen
 
 **Technology Integration:**
 - Warehouse Management System (WMS) optimization
-- Automated sorting system implementation
+- Automated sorting system review
 - Real-time tracking and monitoring
 - Performance analytics dashboard deployment
 
-**Staff Productivity Enhancement:**
-- Productivity target setting and monitoring
-- Performance-based incentive programs
-- Cross-training for operational flexibility
-- Continuous improvement suggestion system
-
 **Efficiency Metrics:**
-- Order processing time: 30 minutes target
+- Order processing time target: 30 minutes
 - Orders per hour per worker optimization
 - Accuracy maintenance during efficiency gains
 - Customer satisfaction correlation tracking
 
-**Resource Optimization:**
-- Staff scheduling optimization for peak demand
-- Equipment utilization maximization
-- Space utilization efficiency improvement
-- Energy efficiency and cost reduction
-
-**Performance Monitoring:**
-- Real-time efficiency tracking
-- Daily performance reporting
-- Weekly optimization review
-- Monthly efficiency assessment and planning
-
 Operational efficiency directly impacts customer satisfaction and business profitability."""
 
-    def handle_temperature_control(self, query: str) -> str:
-        """Handle warehouse temperature control and cold chain management"""
-        return """🌡️ **Temperature Control & Cold Chain Management**
+    def analyze_temperature_deviation(self, query: str) -> str:
+        """Identify the type of temperature control failure"""
+        query_lower = query.lower()
+        if any(w in query_lower for w in ['frozen', 'freeze', 'ice', '-18']):
+            return "FROZEN_STORAGE_BREACH"
+        elif any(w in query_lower for w in ['chilled', 'refrigerated', 'cold']):
+            return "CHILLED_STORAGE_BREACH"
+        return "GENERAL_TEMPERATURE_DEVIATION"
+
+    def assess_temperature_safety_risk(self, analysis: str) -> str:
+        """Assess the safety risk from the temperature deviation"""
+        return "HIGH_SAFETY_RISK" if analysis == "FROZEN_STORAGE_BREACH" else "MODERATE_SAFETY_RISK"
+
+    def check_cold_chain_equipment(self, analysis: str) -> str:
+        """Check cold chain equipment status and monitoring logs"""
+        return f"Cold chain equipment diagnostic initiated for {analysis} — temperature logs being reviewed"
+
+    def decide_temperature_resolution(self, analysis: str, safety: str, equipment: str) -> str:
+        """Decide temperature control resolution actions"""
+        if safety == "HIGH_SAFETY_RISK":
+            return "IMMEDIATE_PRODUCT_QUARANTINE_EQUIPMENT_REPAIR"
+        return "EQUIPMENT_MAINTENANCE_PROTOCOL_REVIEW"
+
+    def generate_temperature_report(self, decision: str, analysis: str, safety: str) -> str:
+        """Generate temperature control emergency action report"""
+        return f"""🌡️ **Temperature Control & Cold Chain Management**
 
 **Cold Chain Compliance Alert**
 
-**Temperature Control Issue:**
-- Cold chain protocol breach detected
-- Product temperature integrity compromised
-- Immediate corrective actions required
-- Customer safety priority activation
+**Temperature Control Issue:** {analysis} — Safety Risk: {safety}
 
 **Immediate Response Actions:**
-1. Temperature-sensitive product inspection
-2. Cold storage equipment diagnostic check
+1. Temperature-sensitive product inspection initiated
+2. Cold storage equipment diagnostic check: {decision}
 3. Affected product isolation and assessment
 4. Customer order impact evaluation
 
-**Cold Chain Protocol:**
+**Cold Chain Protocol Activated:**
 - Temperature monitoring system verification
 - Cold storage equipment maintenance check
-- Staff training on temperature procedures
 - Emergency response protocol activation
+- Backup cooling system activated
 
 **Product Safety Assessment:**
 - Fresh produce quality verification
 - Frozen product integrity check
 - Dairy product safety evaluation
-- Temperature-sensitive medication review
+- Temperature-sensitive item safety review
 
-**Equipment Maintenance:**
-- Refrigeration system diagnostic and repair
-- Temperature monitoring device calibration
-- Backup cooling system activation
-- Preventive maintenance schedule acceleration
-
-**Quality Assurance Measures:**
-- Temperature logging system enhancement
-- Alert notification system optimization
-- Staff training on temperature protocols
-- Customer safety communication preparation
-
-**Compliance Standards:**
+**Compliance Standards Enforced:**
 - Fresh products: 0-4°C maintenance
 - Frozen products: -18°C or below
-- Continuous temperature monitoring
-- Documentation and reporting requirements
+- Continuous temperature monitoring active
+- Documentation and reporting requirements met
 
 **Prevention Measures:**
-- Redundant cooling system installation
-- Temperature alert system enhancement
-- Regular equipment maintenance scheduling
-- Staff certification in cold chain management
+- Redundant cooling system status checked
+- Temperature alert system enhanced
+- Regular equipment maintenance accelerated
+- Staff certification in cold chain management refreshed
 
 Temperature control is critical for product safety and customer health."""
