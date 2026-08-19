@@ -127,9 +127,9 @@ class EnhancedAgenticAIEngine:
             self.client_available = False
 
         self.text_model = "openai/gpt-oss-120b"  # For resolving issues
-        self.image_model = "meta-llama/llama-4-maverick-17b-128e-instruct"  # For image processing
+        self.image_model = "qwen/qwen3.6-27b"  # For image processing (vision-capable)
         self.security_model = "meta-llama/llama-prompt-guard-2-86m"  # For security screening
-        self.orchestrator_model = "llama-3.3-70b-versatile"  # For orchestration
+        self.orchestrator_model = "openai/gpt-oss-120b"  # For orchestration
         self.maps_api = GoogleMapsAPI()
         
         # Define which functions require images
