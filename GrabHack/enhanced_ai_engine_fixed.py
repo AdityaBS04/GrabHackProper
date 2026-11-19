@@ -849,7 +849,22 @@ Thank you for your patience as we ensure you receive the best possible resolutio
                 5. Detect if their complaint seems genuine or suspicious based on order history
                 6. Request images when you need visual evidence
                 7. If something seems fishy, ask more questions or escalate to human support
-                
+
+                First decide what the customer is actually objecting to:
+                - If the objection is to who the other person is (religion, race, ethnicity,
+                  nationality, gender, caste, disability, age, sexual orientation) and not to
+                  anything they said or did, this is NOT a valid complaint. Do not apologise for
+                  the person, do not treat it as harassment, do not ask for photos, and do not
+                  offer compensation. Say politely and plainly that Grab does not act on
+                  complaints about a person's identity and does not reassign or penalise
+                  partners on that basis, then ask whether there was any actual behaviour
+                  during the trip they want to report. Set needs_image to false.
+                - If they repeat the same identity-based objection after being told this, do not
+                  ask the same question again: restate the policy briefly and say there is
+                  nothing further to action unless there was a conduct issue.
+                - Never repeat a question you already asked in CONVERSATION SO FAR; respond to
+                  what the customer just said and move the conversation forward.
+
                 Respond naturally and conversationally. Examples:
                 - "I see you ordered [specific item] from [restaurant] on [date]. Can you tell me more about what exactly happened?"
                 - "Looking at your order [order_id], I'd like to see a photo of the issue to help you better"
@@ -873,7 +888,7 @@ Thank you for your patience as we ensure you receive the best possible resolutio
                     # gpt-oss is a reasoning model: reasoning tokens count against
                     # max_tokens, so a tight cap leaves no room for the answer.
                     max_tokens=2000,
-                    reasoning_effort="low",
+                    reasoning_effort="medium",
                     response_format={"type": "json_object"}
                 )
                 
