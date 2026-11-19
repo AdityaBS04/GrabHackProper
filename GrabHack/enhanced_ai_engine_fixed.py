@@ -691,7 +691,8 @@ Is there anything else I can help you with regarding your current order?
                 messages=[{"role": "user", "content": prompt}],
                 model=self.text_model,
                 temperature=0.3,
-                max_tokens=300
+                max_tokens=2000,
+                reasoning_effort="low"
             )
             
             return self._clean_unicode_response(response.choices[0].message.content)
@@ -869,7 +870,11 @@ Thank you for your patience as we ensure you receive the best possible resolutio
                     messages=[{"role": "user", "content": prompt}],
                     model=self.orchestrator_model,
                     temperature=0.7,
-                    max_tokens=300
+                    # gpt-oss is a reasoning model: reasoning tokens count against
+                    # max_tokens, so a tight cap leaves no room for the answer.
+                    max_tokens=2000,
+                    reasoning_effort="low",
+                    response_format={"type": "json_object"}
                 )
                 
                 try:
@@ -927,7 +932,9 @@ Thank you for your patience as we ensure you receive the best possible resolutio
                 messages=[{"role": "user", "content": analysis_prompt}],
                 model=self.orchestrator_model,
                 temperature=0.3,
-                max_tokens=500
+                max_tokens=2000,
+                reasoning_effort="low",
+                response_format={"type": "json_object"}
             )
             
             try:
